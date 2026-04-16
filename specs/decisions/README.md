@@ -50,4 +50,5 @@ What to watch for in V1.1+ that might prompt revisiting.
 
 | # | Title | Status |
 |---|-------|--------|
-| [001](001-check-in-cadence.md) | Check-in cadence: pain diary vs. medication tracker | Decided |
+| [001](001-check-in-cadence.md) | Check-in cadence: pain diary vs. medication tracker | Partially superseded by 002 |
+| [002](002-event-driven-logging.md) | Event-driven logging: replacing the BID data model | Decided |

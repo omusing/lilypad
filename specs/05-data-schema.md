@@ -18,7 +18,6 @@ One row per check-in submission. The core clinical record.
 CREATE TABLE IF NOT EXISTS entries (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
   entry_date       TEXT    NOT NULL,
-  check_in_period  TEXT    NOT NULL,
   pain_level       INTEGER NOT NULL,
   pain_regions     TEXT    NOT NULL,
   pain_qualities   TEXT,
@@ -35,30 +34,30 @@ CREATE TABLE IF NOT EXISTS entries (
 | Column | Type | Nullable | Notes |
 |---|---|---|---|
 | `id` | INTEGER | — | Auto-increment PK |
-| `entry_date` | TEXT | No | YYYY-MM-DD. User-selected date. Used for report aggregation and sparkline. Not the insert time. |
-| `check_in_period` | TEXT | No | `'morning'` or `'evening'`. The clinical slot, not the clock time of submission. |
+| `entry_date` | TEXT | No | YYYY-MM-DD. The calendar date this entry belongs to. Defaults to today; user can override when back-dating. Used for report aggregation and sparkline. |
 | `pain_level` | INTEGER | No | 0–10 |
 | `pain_regions` | TEXT | No | JSON array of region keys. Min 1 selection required. Example: `["lower_back","hips"]` |
 | `pain_qualities` | TEXT | Yes | JSON array of quality keys. Optional. Example: `["aching","throbbing"]` |
 | `triggers` | TEXT | Yes | JSON array of trigger keys. Optional. |
 | `mood` | INTEGER | Yes | 1–5. Optional. |
-| `sleep_quality` | INTEGER | Yes | 1–5. Optional. |
-| `medication_ids` | TEXT | Yes | JSON array of `medications.id` values (device-local SQLite IDs). Optional. |
+| `sleep_quality` | INTEGER | Yes | 1–5. Optional. Most meaningful when logged in the morning, but not restricted to any time window. |
+| `medication_ids` | TEXT | Yes | JSON array of `medications.id` values (device-local SQLite IDs). Optional convenience field — not the canonical dose record (see `medication_doses`). |
 | `note` | TEXT | Yes | Free-text provider note. Optional. |
 | `created_at` | TEXT | No | ISO 8601 precise system timestamp at insert. **Never modified after insert.** Used as the canonical unique identifier for deduplication during import. |
 | `updated_at` | TEXT | Yes | ISO 8601 precise system timestamp of the most recent edit. NULL until first edit. Set on every subsequent save. |
 
 **Constraints:**
-- `check_in_period` must be `'morning'` or `'evening'`. Enforced in application code (`db/entries.ts`), not a DB check constraint (SQLite CHECK constraint optional but recommended).
 - `entry_date` must be a valid YYYY-MM-DD date not in the future. Enforced in application code.
-- At most one entry per `(entry_date, check_in_period)` pair is expected by the UX, but not enforced at the DB level. The UI prevents duplicate submission; the import path uses `created_at` for deduplication.
+- Multiple entries on the same `entry_date` are expected and valid (user may log pain several times per day).
+- The import path uses `created_at` for deduplication (skip any entry whose `created_at` already exists in the DB).
 
 **Timestamp semantics:**
-- `entry_date` + `check_in_period` = what this entry is *for* (user-controlled, editable)
+- `entry_date` = what calendar day this entry is *for* (user-controlled, defaults to today, overridable for back-dating)
 - `created_at` = when the row was *inserted* (system-controlled, immutable)
 - `updated_at` = when the row was last *changed* (system-controlled, set on edit)
 
-These three things are distinct. See [decisions/001-check-in-cadence.md](decisions/001-check-in-cadence.md).
+These are distinct. Back-dating changes `entry_date` but not `created_at`. See
+[decisions/002-event-driven-logging.md](decisions/002-event-driven-logging.md).
 
 ---
 
@@ -156,10 +155,6 @@ pending migrations in a transaction, and updates `schema_version` when done.
 
 ## Enum values
 
-**`entries.check_in_period`**
-- `'morning'` — the AM check-in window (anchored to morning state)
-- `'evening'` — the PM check-in window (anchored to end-of-day state)
-
 **`entries.pain_level`** — integer 0–10
 
 **`entries.mood`** — integer 1–5 (emoji scale; 1 = worst, 5 = best)
@@ -217,7 +212,6 @@ Full schema used by `lib/export.ts` and validated by `lib/import.ts`.
   "entries": [
     {
       "entry_date": "2026-04-12",
-      "check_in_period": "morning",
       "pain_level": 7,
       "pain_regions": ["lower_back", "hips"],
       "pain_qualities": ["aching", "throbbing"],

@@ -4,59 +4,43 @@
 
 ---
 
-### Check-In Entry
+### Pain Log Entry
 
-Users log pain twice daily — morning and evening. Every entry belongs to one of
-these two periods, regardless of when it was actually filled in.
+Users log a pain reading when they choose to — typically when they feel something
+worth recording, or when prompted by a reminder. There is no mandatory morning/evening
+structure. Each log is a timestamped event.
 
-Morning captures overnight and wake-up state. Evening captures end-of-day state.
-These are the two windows with the highest clinical signal for diurnal pain variation
-and are the data points providers most commonly ask about in appointments.
+Two daily reminder notifications are available (morning and evening) as configurable
+habit scaffolds. They are not structural requirements — the user can log as often or
+as rarely as their experience warrants. See
+[decisions/002-event-driven-logging.md](decisions/002-event-driven-logging.md).
 
-The cadence coincides with the most prevalent chronic pain medication schedule (BID),
-making the habit easy to layer onto an existing routine. However, check-ins are not
-triggered by or tied to medication intake. Medication doses are logged independently
-via the Medications tab. The wizard question "which medications did you take?" is a
-shortcut to catch doses that were not logged at the time — not the canonical dose
-record. See [decisions/001-check-in-cadence.md](decisions/001-check-in-cadence.md).
-
-**Fields captured per entry:**
-- Pain score (0–10)
-- Pain location (11 regions, multi-select)
+**Fields captured per pain log:**
+- Pain score (0–10, required)
+- Pain location (11 regions, multi-select, required — at least 1)
 - Pain quality (10 descriptors, multi-select, optional)
 - Triggers (12 options, multi-select, optional)
 - Mood (1–5 emoji scale, optional)
 - Sleep quality (1–5 emoji scale, optional)
-- Medications taken (from personal medication list, multi-select, optional)
+- Medications noted (from personal medication list, multi-select, optional —
+  a convenience shortcut; the canonical dose record is in `medication_doses`)
 - Free-text note for provider (optional)
 
-**Input method — open design decision:**
-The input method for check-in entries is not finalized. Two approaches are
-under consideration and may be combined:
+**Input method:** 5-step wizard. One topic per screen, progress indicator,
+guided flow. Suitable for first-time users and users who find forms
+overwhelming. The demo will validate whether a "quick mode" (scrollable form)
+should be offered to returning users.
 
-- **5-step wizard:** One topic per screen, progress indicator, guided flow.
-  Better for first-time users and users who find forms overwhelming. Reduces
-  cognitive load per screen.
-
-- **Scrollable form:** All fields on one screen, scroll to complete. Faster
-  for returning users who know the app. Easier to review before submitting.
-
-Both approaches may be offered simultaneously (e.g., wizard as default for
-first N check-ins, then offer a "quick mode" option). The demo phase will
-inform which approach works better for this demographic.
-
-Regardless of input method: the entry must be completable in under 60 seconds
-for the pain score + location minimum case.
+The minimum case (pain score + location only) must be completable in under 60 seconds.
 
 ---
 
 ### Home Screen
 
-- Greeting with time-of-day context ("Good morning" / "Good evening")
-- Today's AM / PM check-in completion status
-- 14-day pain sparkline (daily average, gaps for missing days)
-- Primary CTA: "Start Check-In" (or "Start Morning Check-In" / "Start Evening
-  Check-In" depending on time of day and completion status)
+- Greeting with patient name (if set)
+- Two equal primary action buttons: **"Log Pain"** and **"Log Medication"**
+- Recent activity summary: last pain log time, last medication logged
+- 14-day pain sparkline (daily pain log count or average, gaps for days with no entries)
 - Access to Settings via header icon
 
 ---
@@ -67,8 +51,7 @@ Scrollable log of all entries, newest first. This screen is the primary surface
 for reviewing and managing past entries.
 
 **Viewing:**
-- Each row: date, period badge (🌅 Morning / 🌙 Evening),
-  pain level badge (color-coded), top regions, mood emoji
+- Each row: date + time, pain level badge (color-coded), top regions, mood emoji
 - Tap row → Entry Detail
 
 **Adding from History:**
@@ -92,13 +75,12 @@ Confirmation required. Cannot be undone.
 Used for both viewing existing entries and creating new ones from the History
 screen. All fields are editable.
 
-**Date and time fields (always shown, always editable):**
+**Date field (always shown, always editable):**
 - **Date selector:** Defaults to today. User can select any past date.
   Uses `@react-native-community/datetimepicker` (mode="date").
   Future dates are disabled.
-- **Check-in period:** Segmented control — Morning | Evening.
-  Defaults to Morning if before noon, Evening if noon or later.
-  Every entry is one or the other — back-dated, edited, or same-day.
+  (The time of logging is always `created_at` — the system timestamp at insert.
+  Back-dating changes `entry_date` but not `created_at`.)
 
 **Clinical fields (same as wizard):**
 - Pain score, regions, qualities, triggers, mood, sleep, medications, note
@@ -106,10 +88,9 @@ screen. All fields are editable.
 **On save:**
 - `entry_date` = date selected in the date picker (YYYY-MM-DD). Used for report
   aggregation and the home-screen sparkline.
-- `check_in_period` = period selected (morning / evening).
 - For new entries: `created_at` = precise system timestamp at insert. `updated_at` = NULL.
-- For edits: `entry_date` and `check_in_period` reflect the user's selection. `created_at`
-  unchanged (original insert time preserved). `updated_at` = precise system timestamp.
+- For edits: `entry_date` reflects the user's date selection. `created_at` unchanged
+  (original insert time preserved). `updated_at` = precise system timestamp.
 - Save / Cancel buttons. Delete button (with confirmation) on existing entries.
 
 ---
@@ -135,7 +116,7 @@ screen. All fields are editable.
 
 **Clinical content:**
 - Summary stats: average, peak, and low pain; average mood; average sleep;
-  check-ins completed
+  pain logs count (total entries in period)
 - Pain trend line chart (daily average, gaps for days with no entries)
 - Top triggers by frequency (horizontal bar chart)
 - Most affected regions by frequency
@@ -186,8 +167,8 @@ covering:
 ### Settings
 
 - Patient name (shown on PDF and Home greeting)
-- Morning check-in reminder (toggle + time picker)
-- Evening check-in reminder (toggle + time picker)
+- Morning reminder (toggle + time picker) — habit scaffold, not a structural requirement
+- Evening reminder (toggle + time picker) — habit scaffold, not a structural requirement
 - Export your data (JSON, via share sheet)
 - Import from backup (file picker)
 - Delete all entries (confirmation required; medications preserved)
@@ -201,7 +182,7 @@ covering:
 4 steps:
 1. Welcome — what Lilypad does, the privacy promise
 2. Your name (optional) — appears on report and greeting
-3. Set reminders — morning and evening times, requests notification permission
+3. Set reminders — optional morning and evening notification times, requests notification permission
 4. Add medications (optional) — same form as Medications tab
 
 ---
@@ -225,6 +206,13 @@ Both directions required in V1. Export without import is not a migration path.
 - **Catch-up flow:** Surface a prompt when a user reopens the app after missing
   N days: "You haven't logged in 3 days — want to add a quick entry for how
   you've been feeling?" Lightweight single-screen entry, not the full wizard.
+- **Unified timeline:** A single scrollable timeline mixing pain log entries and
+  medication dose events, visually differentiated by type. Currently pain logs
+  (History tab) and medication doses (Medications tab) are separate views.
+- **Medication schedule + missed-dose reminders:** User defines an expected
+  dosing schedule per medication (e.g., "Ibuprofen at 8am and 8pm"). App detects
+  when a scheduled dose was not logged and offers a retroactive prompt. Requires
+  the medication schedule concept not present in V1.
 - Custom date range for reports
 - Trigger correlation insights ("pain tends to be higher after poor sleep")
 

@@ -1,6 +1,6 @@
 # 001 — Check-in cadence: pain diary vs. medication tracker
 
-**Status:** Decided
+**Status:** Partially superseded by [002](002-event-driven-logging.md)
 **Date:** 2026-04-13
 
 ## Context
