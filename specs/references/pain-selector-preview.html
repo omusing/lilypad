@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lilypad — Pain Selector</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* =========================================================
+       DESIGN TOKENS (same as home-screen-preview)
+       ========================================================= */
+    :root {
+      --color-bg:            #E2EEE7;
+      --color-card:          #F4FAF6;
+      --color-text:          #1C2523;
+      --color-text-secondary:#6B7C73;
+      --color-border:        #D0DFDA;
+      --color-pain:          #9E5252;
+      --color-med:           #2E7D5E;
+      --color-brand:         #2E7D5E;
+
+      --font-serif:  'Fraunces', Georgia, serif;
+      --font-sans:   'Instrument Sans', system-ui, sans-serif;
+
+      --shadow-card: 0 4px 16px rgba(26,122,78,0.13), 0 1px 4px rgba(26,122,78,0.08);
+      --shadow-phone:0 32px 80px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.10);
+
+      /* Pain scale gradient: 0 (neutral) → 10 (pain red) */
+      --pain-0:  #E8E8E4;
+      --pain-1:  #EDE5C4;
+      --pain-2:  #EDD898;
+      --pain-3:  #E8C46C;
+      --pain-4:  #E0A83C;
+      --pain-5:  #D08830;
+      --pain-6:  #C07040;
+      --pain-7:  #B85848;
+      --pain-8:  #AE4E4E;
+      --pain-9:  #A44848;
+      --pain-10: #9E5252;
+
+      /* Text color on each badge (dark for light bg, white for dark) */
+      --pain-text-0:  #6B7C73;
+      --pain-text-1:  #7A6A30;
+      --pain-text-2:  #7A5A18;
+      --pain-text-3:  #7A4A10;
+      --pain-text-4:  #ffffff;
+      --pain-text-5:  #ffffff;
+      --pain-text-6:  #ffffff;
+      --pain-text-7:  #ffffff;
+      --pain-text-8:  #ffffff;
+      --pain-text-9:  #ffffff;
+      --pain-text-10: #ffffff;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: #C8D8CC;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    /* =========================================================
+       PHONE FRAME
+       ========================================================= */
+    .phone {
+      width: 393px;
+      height: 852px;
+      background: var(--color-bg);
+      border-radius: 54px;
+      box-shadow: var(--shadow-phone);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .phone::before {
+      content: '';
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 34px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 10;
+    }
+
+    .status-bar {
+      height: 59px;
+      padding: 18px 28px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .status-bar .time {
+      font-size: 15px; font-weight: 600; color: var(--color-text);
+    }
+    .status-bar .icons {
+      display: flex; gap: 6px; align-items: center;
+    }
+
+    /* =========================================================
+       SCREEN CONTENT
+       ========================================================= */
+    .screen-content {
+      flex: 1;
+      padding: 12px 24px 32px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Progress bar */
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+    .progress-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--color-border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 20%;  /* step 1 of 5 */
+      background: var(--color-brand);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    .progress-label {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+    }
+
+    /* Question */
+    .question {
+      margin-bottom: 8px;
+    }
+    .question-heading {
+      font-family: var(--font-serif);
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--color-text);
+      line-height: 1.2;
+      letter-spacing: -0.3px;
+      margin-bottom: 6px;
+    }
+    .question-sub {
+      font-size: 15px;
+      color: var(--color-text-secondary);
+    }
+
+    /* =========================================================
+       PAIN SELECTOR — vertical list
+       ========================================================= */
+    .selector-wrap {
+      background: var(--color-card);
+      border-radius: 24px;
+      box-shadow: var(--shadow-card);
+      overflow: hidden;       /* rows flush to card edges */
+      margin-top: 20px;
+    }
+
+    .pain-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 16px;
+      height: 48px;           /* meets 44pt min, comfortable at 48 */
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      width: 100%;
+      text-align: left;
+      transition: background 80ms ease;
+      border-bottom: 1px solid var(--color-border);
+      position: relative;
+    }
+
+    .pain-row:last-child {
+      border-bottom: none;
+    }
+
+    .pain-row:active {
+      background: rgba(0,0,0,0.04);
+    }
+
+    /* Colored number badge */
+    .pain-badge {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-sans);
+      font-size: 15px;
+      font-weight: 700;
+      flex-shrink: 0;
+      transition: transform 120ms ease;
+    }
+
+    .pain-row[data-v="0"]  .pain-badge { background: var(--pain-0);  color: var(--pain-text-0); }
+    .pain-row[data-v="1"]  .pain-badge { background: var(--pain-1);  color: var(--pain-text-1); }
+    .pain-row[data-v="2"]  .pain-badge { background: var(--pain-2);  color: var(--pain-text-2); }
+    .pain-row[data-v="3"]  .pain-badge { background: var(--pain-3);  color: var(--pain-text-3); }
+    .pain-row[data-v="4"]  .pain-badge { background: var(--pain-4);  color: var(--pain-text-4); }
+    .pain-row[data-v="5"]  .pain-badge { background: var(--pain-5);  color: var(--pain-text-5); }
+    .pain-row[data-v="6"]  .pain-badge { background: var(--pain-6);  color: var(--pain-text-6); }
+    .pain-row[data-v="7"]  .pain-badge { background: var(--pain-7);  color: var(--pain-text-7); }
+    .pain-row[data-v="8"]  .pain-badge { background: var(--pain-8);  color: var(--pain-text-8); }
+    .pain-row[data-v="9"]  .pain-badge { background: var(--pain-9);  color: var(--pain-text-9); }
+    .pain-row[data-v="10"] .pain-badge { background: var(--pain-10); color: var(--pain-text-10); }
+
+    .pain-row-label {
+      font-size: 15px;
+      color: var(--color-text);
+      font-weight: 400;
+      flex: 1;
+    }
+
+    /* Selected state: highlight row + bold label + checkmark */
+    .pain-row.selected {
+      background: rgba(158, 82, 82, 0.07);
+    }
+
+    .pain-row[data-v="0"].selected,
+    .pain-row[data-v="1"].selected,
+    .pain-row[data-v="2"].selected,
+    .pain-row[data-v="3"].selected { background: rgba(200, 170, 80, 0.10); }
+
+    .pain-row.selected .pain-badge {
+      transform: scale(1.12);
+    }
+
+    .pain-row.selected .pain-row-label {
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .pain-check {
+      opacity: 0;
+      font-size: 18px;
+      color: var(--color-pain);
+      transition: opacity 120ms ease;
+      flex-shrink: 0;
+    }
+
+    .pain-row.selected .pain-check {
+      opacity: 1;
+    }
+
+    /* =========================================================
+       BOTTOM NAV BUTTONS
+       ========================================================= */
+    .nav-buttons {
+      margin-top: auto;
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn-next {
+      flex: 1;
+      height: 56px;
+      border: none;
+      border-radius: 28px;
+      background: var(--color-brand);
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: -0.1px;
+    }
+    .btn-back {
+      width: 56px;
+      height: 56px;
+      border: 1.5px solid var(--color-border);
+      border-radius: 28px;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .home-indicator {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 134px;
+      height: 5px;
+      background: var(--color-text);
+      border-radius: 3px;
+      opacity: 0.18;
+    }
+  </style>
+</head>
+<body>
+
+<div class="phone">
+
+  <div class="status-bar">
+    <span class="time">9:41</span>
+    <div class="icons">
+      <svg width="17" height="12" viewBox="0 0 17 12" fill="#1C2523"><rect x="0" y="6" width="3" height="6" rx="1"/><rect x="4.5" y="4" width="3" height="8" rx="1"/><rect x="9" y="2" width="3" height="10" rx="1"/><rect x="13.5" y="0" width="3" height="12" rx="1"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="#1C2523"><rect x="0" y="1" width="21" height="10" rx="2.5" stroke="currentColor" stroke-width="1" fill="none"/><rect x="1.5" y="2.5" width="16" height="7" rx="1.5"/><path d="M22.5 4.5v3a1.5 1.5 0 0 0 0-3z"/></svg>
+    </div>
+  </div>
+
+  <div class="screen-content">
+
+    <!-- Progress -->
+    <div class="progress-row">
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <span class="progress-label">Step 1 of 5</span>
+    </div>
+
+    <!-- Question -->
+    <div class="question">
+      <div class="question-heading">How's your pain right now?</div>
+      <div class="question-sub">0 = no pain &nbsp;·&nbsp; 10 = worst imaginable</div>
+    </div>
+
+    <!-- Selector card -->
+    <div class="selector-wrap" id="painGrid">
+      <!-- Rows injected by JS -->
+    </div>
+
+    <!-- Nav -->
+    <div class="nav-buttons">
+      <button class="btn-back" aria-label="Back">←</button>
+      <button class="btn-next" id="nextBtn" disabled style="opacity:0.4">Next →</button>
+    </div>
+
+  </div>
+
+  <div class="home-indicator"></div>
+</div>
+
+<script>
+  const labels = [
+    "No pain",
+    "Very mild, barely noticeable",
+    "Mild, can be ignored",
+    "Noticeable, distracting",
+    "Moderate, hard to ignore",
+    "Moderate, affects daily tasks",
+    "Severe, limits concentration",
+    "Very severe, limits activity",
+    "Intense, barely functional",
+    "Excruciating",
+    "Worst imaginable"
+  ];
+
+  const grid    = document.getElementById('painGrid');
+  const nextBtn = document.getElementById('nextBtn');
+
+  for (let i = 0; i <= 10; i++) {
+    const row = document.createElement('button');
+    row.className = 'pain-row';
+    row.dataset.v = i;
+    row.setAttribute('aria-label', `Pain level ${i}: ${labels[i]}`);
+    row.innerHTML = `
+      <span class="pain-badge">${i}</span>
+      <span class="pain-row-label">${labels[i]}</span>
+      <span class="pain-check" aria-hidden="true">✓</span>
+    `;
+    row.addEventListener('click', () => select(i, row));
+    grid.appendChild(row);
+  }
+
+  function select(value, row) {
+    document.querySelectorAll('.pain-row').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+    nextBtn.disabled = false;
+    nextBtn.style.opacity = '1';
+  }
+</script>
+
+</body>
+</html>

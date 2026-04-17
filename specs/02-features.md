@@ -33,6 +33,11 @@ should be offered to returning users.
 
 The minimum case (pain score + location only) must be completable in under 60 seconds.
 
+**Pain score step UI note:**
+Do not show the helper text "0 = no pain / 10 = worst imaginable" above the list.
+Each row already labels 0 and 10 explicitly, so the header text is redundant.
+Removing it lets the full 0–10 list fit on screen with less scrolling.
+
 ---
 
 ### Home Screen
