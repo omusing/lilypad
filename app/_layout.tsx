@@ -18,7 +18,8 @@ import { getSettings } from '@/db/settings';
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [dbReady, setDbReady] = useState(false);
+  const [dbReady, setDbReady]               = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   const [fontsLoaded] = useFonts({
     Fraunces: Fraunces_400Regular,
@@ -32,13 +33,18 @@ export default function RootLayout() {
     runMigrations()
       .then(() => getSettings())
       .then(settings => {
+        setNeedsOnboarding(!settings.onboarding_done);
         setDbReady(true);
-        if (!settings.onboarding_done) {
-          router.replace('/onboarding' as never);
-        }
       })
       .catch(console.error);
   }, []);
+
+  // Redirect only after the Stack navigator has mounted (dbReady + fontsLoaded = rendered)
+  useEffect(() => {
+    if (dbReady && fontsLoaded && needsOnboarding) {
+      router.replace('/onboarding' as never);
+    }
+  }, [dbReady, fontsLoaded, needsOnboarding]);
 
   useEffect(() => {
     if (fontsLoaded && dbReady) {
@@ -66,8 +72,7 @@ export default function RootLayout() {
           name="entry/[id]"
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
-        <Stack.Screen name="medication/[id]" options={{ presentation: 'card' }} />
-        <Stack.Screen name="settings"        options={{ presentation: 'card' }} />
+        <Stack.Screen name="settings" options={{ presentation: 'card' }} />
         <Stack.Screen name="about"           options={{ presentation: 'card' }} />
       </Stack>
     </>

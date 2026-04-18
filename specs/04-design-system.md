@@ -155,12 +155,14 @@ card:  '0 4px 16px rgba(26,122,78,0.13), 0 1px 4px rgba(26,122,78,0.08)'
 - Selected: row background tinted, label bold, checkmark visible on right
 - Next button disabled until a selection is made
 
-### Emoji scale (mood + sleep quality, wizard steps 4–5)
+### Emoji scale (mood + sleep quality, wizard step 4)
 
 - 5 options in a horizontal row
-- Colored face icons, numbered 1–5 below each
+- Style: simplified, monochromatic or minimal-color graphic smileys — not standard
+  Unicode emoji. Goal: calm, designed-for-this-app feel, not "emoji keyboard". Exact
+  style TBD pending design pass against the uploaded reference image.
+- Numbered 1–5 below each option
 - Same row-selection pattern as pain selector but horizontal
-- Matches reference: `specs/references/Lilypad App UI Design System Image.png`
 
 ### Widget cards (Home screen)
 
@@ -169,6 +171,36 @@ card:  '0 4px 16px rgba(26,122,78,0.13), 0 1px 4px rgba(26,122,78,0.08)'
 - Border-radius: 20px
 - Section label: 12px, 600 weight, uppercase, `textSecondary` color, letter-spacing 0.8px
 - Content padding: 16px
+
+### Wizard visual identity
+
+The two logging flows must be visually distinct so the user always knows which wizard
+they are in. Applied consistently to: wizard header background or accent, progress bar
+fill, and primary action button.
+
+| Flow | Color | Token |
+|---|---|---|
+| Pain wizard | Muted brick rose | `Colors.pain` (`#9E5252`) |
+| Medication wizard | Forest green | `Colors.med` (`#2E7D5E`) |
+
+### Filled pill (tappable value display)
+
+Used for settings values that are both readable and tappable (e.g. reminder time).
+Replaces plain text + separate picker trigger.
+
+- Background: `Colors.med`
+- Text: `#ffffff`, `FontFamily.sans`, `FontSize.bodySmall`, weight 600
+- Border-radius: `Radius.button` (28px, full pill)
+- Padding: 6px vertical, 14px horizontal
+- Disabled state (when toggle is off): background `Colors.border`, text `Colors.textSecondary`
+- Tap opens the relevant picker inline
+
+### UI copy rules
+
+- No inline hint text under fields unless the content is genuinely non-obvious.
+  Self-evident fields (name, date, toggle labels) need no explanation.
+- No "optional" labels on wizard step headings. Next button state communicates
+  what is required; silence communicates everything else is optional.
 
 ### Tab bar
 
