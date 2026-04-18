@@ -212,6 +212,24 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Developer tools — dev builds only */}
+        {__DEV__ && (
+          <>
+            <Text style={[styles.sectionLabel, { marginTop: Spacing.lg, color: Colors.pain }]}>
+              Developer
+            </Text>
+            <View style={styles.card}>
+              <TouchableOpacity
+                style={styles.linkRow}
+                onPress={() => router.push('/dev-tools' as never)}
+              >
+                <Text style={[styles.linkLabel, { color: Colors.pain }]}>Developer tools</Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.border} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
         {saving && (
           <Text style={styles.savingText}>Saving...</Text>
         )}

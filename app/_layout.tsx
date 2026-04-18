@@ -72,8 +72,9 @@ export default function RootLayout() {
           name="entry/[id]"
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
-        <Stack.Screen name="settings" options={{ presentation: 'card' }} />
-        <Stack.Screen name="about"           options={{ presentation: 'card' }} />
+        <Stack.Screen name="settings"   options={{ presentation: 'card' }} />
+        <Stack.Screen name="about"      options={{ presentation: 'card' }} />
+        <Stack.Screen name="dev-tools"  options={{ presentation: 'card' }} />
       </Stack>
     </>
   );
