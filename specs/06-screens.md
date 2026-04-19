@@ -122,10 +122,10 @@ Reusable bottom sheet. Invoked from:
 - Headline: "Add medication"
 - Fields (scrollable form):
   - Name (text input, required, placeholder: "Medication name") — supports autocomplete (see below)
-  - Strength chips (horizontal scroll, appears only after a catalog selection — see below)
   - Dose (text input, optional, placeholder: "e.g. 400mg") — pre-filled on catalog selection
-  - Route chips (horizontal scroll, appears only when catalog entry has multiple routes)
+  - Strength chips (horizontal scroll, appears below Dose after a catalog selection — see below)
   - Route (text input, optional, placeholder: "e.g. oral, topical") — pre-filled on catalog selection
+  - Route chips (horizontal scroll, appears below Route when catalog entry has multiple routes)
   - Frequency (text input, optional, placeholder: "e.g. as needed, BID")
 - "Save" button (disabled until Name is filled)
 - "Cancel" link or swipe down to dismiss
@@ -144,14 +144,19 @@ As the user types:
 On selecting a suggestion:
 - Name field fills with the selected brand name (e.g. "Advil") — not the partial query,
   not the generic name. Whatever was in the suggestion's left column.
-- Strength chips appear below the Name field: one chip per available strength
-  (e.g. `200 mg` `400 mg` `600 mg` `800 mg`). Tapping a chip fills the Dose field.
-  The first strength is not auto-selected — the user must tap a chip or type manually.
-- Dose field pre-fills with the first available strength as a starting value.
+- Dose field pre-fills with the first available strength. Strength chips appear below
+  the Dose field: one chip per available strength (e.g. `200 mg` `400 mg` `600 mg`
+  `800 mg`). The chip matching the pre-filled dose is visually active. Tapping any
+  chip overrides the Dose field.
 - Route field pre-fills with the first available route (e.g. "oral").
-- If the catalog entry has more than one route, route chips appear the same way as
-  strength chips. Tapping a chip overrides the Route field.
+- If the catalog entry has more than one route, route chips appear below the Route field
+  the same way. Tapping a chip overrides the Route field.
 - Frequency field remains empty.
+
+**Clearing a catalog selection:** If the user manually types in the Name field after
+selecting a catalog entry, the selection is cleared — strength chips and route chips
+disappear, the pre-filled Dose and Route remain (the user keeps what they had) but
+`catalog_rxcui` will not be saved since no catalog entry is linked.
 
 The user can override any pre-filled field at any time. Autocomplete is a convenience,
 not a gate. Medications not in the catalog can be entered entirely by free text — the
@@ -160,8 +165,10 @@ suggestion list simply doesn't appear.
 **Edit flow:** When editing an existing medication, autocomplete is active on the Name
 field. The existing saved values are shown as starting state. If the user changes the
 Name, suggestions appear as in the add flow. Selecting a new catalog entry replaces
-the Name, clears the strength and route chips, and re-pre-fills Dose and Route from
-the new catalog entry. The user can still override.
+the Name, re-pre-fills Dose and Route from the new entry, and updates `catalog_rxcui`
+to the new entry's rxcui. If the user edits text without selecting from autocomplete,
+`catalog_rxcui` is left unchanged (the stored link may no longer match the displayed
+fields — this is expected and acceptable; see [09-medicine-list.md § catalog_rxcui](09-medicine-list.md)).
 
 **On save:** insert (or update) `medications` row. Fields stored as plain strings
 exactly as they appear in the form at save time — no normalization, no catalog lookup.

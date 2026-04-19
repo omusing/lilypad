@@ -111,13 +111,15 @@ CREATE TABLE IF NOT EXISTS medication_doses (
 | `taken_at` | TEXT | No | ISO 8601 precise system timestamp at the moment the user tapped "Took it now." |
 | `note` | TEXT | Yes | Optional free-text note per dose. Not exposed in V1 UI but preserved in export. |
 
-**Note on `entries.medication_ids`:** The JSON array in `entries.medication_ids`
-is a shortcut — it records which medications the user confirms having taken
-during a check-in period. It is not a replacement for `medication_doses`. A dose
-logged via "Took it now" appears in `medication_doses` with a precise timestamp;
-the wizard question "which meds did you take this period?" writes to
-`entries.medication_ids` as a convenience summary. Both can be populated
-independently.
+**Note on `entries.medication_ids` and dose logging:** The JSON array in
+`entries.medication_ids` records which medications the user checked during the
+pain check-in wizard. On wizard submit, the app also inserts one `medication_doses`
+row per checked medication (`taken_at` = same precise system timestamp as
+`entries.created_at`, `note` = NULL) — these are shortcut dose records, identical
+to tapping "Took it now." A dose logged via "Took it now" (outside the wizard)
+appears in `medication_doses` the same way. The two paths are additive: both
+`entries.medication_ids` and `medication_doses` are populated when the wizard is
+submitted with medications checked.
 
 ---
 
@@ -200,8 +202,14 @@ import to handle version mismatches gracefully (unknown keys: preserve, don't dr
 3. Update `schema_version` to the latest applied version
 4. If any migration fails, roll back the transaction and surface an error
 
-V1 ships at `schema_version = 1`. All four tables are created in migration 1.
-Subsequent migrations are additive only — no column drops or type changes.
+All four tables are created in migration 1. Migration 2 adds `catalog_rxcui TEXT`
+to `medications`. Subsequent migrations are additive only — no column drops or
+type changes.
+
+| Version | What changed |
+|---|---|
+| 1 | Create `entries`, `medications`, `medication_doses`, `app_settings` |
+| 2 | `ALTER TABLE medications ADD COLUMN catalog_rxcui TEXT` |
 
 ---
 

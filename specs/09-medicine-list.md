@@ -101,16 +101,19 @@ ALTER TABLE medications ADD COLUMN catalog_rxcui TEXT;
 `catalog_rxcui` is:
 - Populated when the user picks from autocomplete (`rxcui` of the selected entry).
 - NULL when the user enters a medication by free text (no catalog match).
+- Updated when the user explicitly re-selects a different catalog entry while editing
+  an existing medication. If the user edits the name, dose, or route fields without
+  making a new catalog selection, `catalog_rxcui` is left unchanged.
 - Never used for display. The Medications tab renders `name`, `dose`, `route` from SQLite directly.
 - Reserved for future features: drug interaction warnings, catalog cross-referencing on export.
 
 **Note on intent vs. accuracy:** `catalog_rxcui` captures what the user appeared to
-intend at entry time — which catalog entry they selected. If the user subsequently
-edits the name, dose, or route fields away from the catalog values, `catalog_rxcui`
-no longer matches the displayed data. This is expected and acceptable. The stored value
-is a best-effort record of intent, not a live foreign key to the catalog. Future product
-versions may surface mismatches to ask the user whether they want to re-link — but
-that is out of scope for V1, and no code currently reads `catalog_rxcui` at all.
+intend — which catalog entry they most recently selected. If the user edits text
+fields without re-selecting from autocomplete, `catalog_rxcui` may no longer match
+the displayed data. This is expected and acceptable. The stored value is a best-effort
+record of intent, not a live foreign key to the catalog. Future product versions may
+surface mismatches to ask the user whether they want to re-link — but that is out of
+scope for V1, and no code currently reads `catalog_rxcui` at all.
 
 See [05-data-schema.md](05-data-schema.md) for the full `medications` table definition.
 
