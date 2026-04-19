@@ -25,5 +25,14 @@
     "strengths": ["200 mg / 25 mg"],
     "routes": ["oral"],
     "drugClass": "Combination"
+  },
+  {
+    "rxcui": "466584",
+    "reason": "Excedrin — aspirin/acetaminophen/caffeine, very common OTC headache/migraine combination",
+    "genericName": "aspirin / acetaminophen / caffeine",
+    "brandNames": ["Excedrin Extra Strength", "Excedrin Migraine", "Excedrin Tension Headache"],
+    "strengths": ["250 mg / 250 mg / 65 mg"],
+    "routes": ["oral"],
+    "drugClass": "Combination"
   }
 ]

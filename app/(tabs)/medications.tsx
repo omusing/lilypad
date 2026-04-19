@@ -6,7 +6,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Fuse from 'fuse.js';
 
 import {
   Colors, FontFamily, FontSize, Spacing, Radius, Shadow, TouchTarget,
@@ -18,7 +17,10 @@ import {
 import { getTodayDoseCountByMedication, getLastDoseByMedication } from '@/db/doses';
 import type { Medication } from '@/db/schema';
 import { timeAgo } from '@/lib/time';
-import { MEDICATION_CATALOG, type MedCatalogEntry } from '@/constants/medicationCatalog';
+import {
+  buildSearchIndex, searchMedications, preferredRoute,
+  type SuggestionResult,
+} from '@/lib/medSearch';
 
 // ─── Form state ───────────────────────────────────────────────────────────────
 
@@ -44,11 +46,11 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
   const [form, setForm]               = useState<FormData>(EMPTY_FORM);
   const [saving, setSaving]           = useState(false);
   const [nameError, setNameError]     = useState(false);
-  const [suggestions, setSuggestions] = useState<MedCatalogEntry[]>([]);
-  const [selectedEntry, setSelectedEntry] = useState<MedCatalogEntry | null>(null);
-  const fuseRef = useRef<Fuse<MedCatalogEntry> | null>(null);
+  const [suggestions, setSuggestions] = useState<SuggestionResult[]>([]);
+  const [selectedEntry, setSelectedEntry] = useState<SuggestionResult | null>(null);
+  const indexRef = useRef<ReturnType<typeof buildSearchIndex> | null>(null);
 
-  // Build Fuse index and reset state on modal open
+  // Build search index and reset state on modal open
   const handleOpen = useCallback(() => {
     setForm(
       editing
@@ -58,13 +60,7 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
     setNameError(false);
     setSuggestions([]);
     setSelectedEntry(null);
-    fuseRef.current = new Fuse(MEDICATION_CATALOG, {
-      keys: [
-        { name: 'genericName', weight: 0.6 },
-        { name: 'brandNames',  weight: 0.8 },
-      ],
-      threshold: 0.3,
-    });
+    indexRef.current = buildSearchIndex();
   }, [editing]);
 
   async function handleSave() {
@@ -76,12 +72,12 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
         dose:      form.dose.trim()      || null,
         route:     form.route.trim()     || null,
         frequency: form.frequency.trim() || null,
-        catalog_rxcui: selectedEntry?.rxcui ?? null,
+        catalog_rxcui: selectedEntry?.entry.rxcui ?? null,
       };
       if (editing) {
         await updateMedication(editing.id, {
           name: payload.name, dose: payload.dose, route: payload.route, frequency: payload.frequency,
-          ...(selectedEntry ? { catalog_rxcui: selectedEntry.rxcui } : {}),
+          ...(selectedEntry ? { catalog_rxcui: selectedEntry.entry.rxcui } : {}),
         });
       } else {
         await insertMedication(payload);
@@ -99,23 +95,20 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
         setNameError(false);
         if (selectedEntry) setSelectedEntry(null);
         setSuggestions(
-          val.length >= 2 && fuseRef.current
-            ? fuseRef.current.search(val).slice(0, 5).map(r => r.item)
-            : []
+          indexRef.current ? searchMedications(val, indexRef.current) : []
         );
       }
     };
   }
 
-  function selectCatalogEntry(entry: MedCatalogEntry) {
-    const displayName = entry.brandNames[0] ?? entry.genericName;
+  function selectCatalogEntry(result: SuggestionResult) {
     setForm(f => ({
       ...f,
-      name:  displayName,
-      dose:  entry.strengths[0] ?? f.dose,
-      route: entry.routes[0]    ?? f.route,
+      name:  result.displayName,
+      dose:  result.strength,
+      route: preferredRoute(result.entry.routes),
     }));
-    setSelectedEntry(entry);
+    setSelectedEntry(result);
     setSuggestions([]);
   }
 
@@ -159,6 +152,9 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
               placeholderTextColor={Colors.textSecondary}
               value={form.name}
               onChangeText={patch('name')}
+              autoCorrect={false}
+              autoCapitalize="none"
+              spellCheck={false}
               autoFocus
               returnKeyType="next"
             />
@@ -167,18 +163,18 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
             {/* Autocomplete suggestions */}
             {suggestions.length > 0 && (
               <View style={sheet.suggestions}>
-                {suggestions.map(entry => (
+                {suggestions.map((result, i) => (
                   <TouchableOpacity
-                    key={entry.rxcui}
+                    key={`${result.entry.rxcui}-${result.strength}-${i}`}
                     style={sheet.suggestionRow}
-                    onPress={() => selectCatalogEntry(entry)}
+                    onPress={() => selectCatalogEntry(result)}
                     activeOpacity={0.75}
                   >
                     <Text style={sheet.suggestionName}>
-                      {entry.brandNames[0] ?? entry.genericName}
+                      {result.displayName}  ·  {result.strength}
                     </Text>
                     <Text style={sheet.suggestionMeta}>
-                      {entry.genericName !== (entry.brandNames[0] ?? '') ? `${entry.genericName} · ` : ''}{entry.drugClass}
+                      {result.metaLabel}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -195,13 +191,15 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
               placeholderTextColor={Colors.textSecondary}
               value={form.dose}
               onChangeText={patch('dose')}
+              autoCorrect={false}
+              autoCapitalize="none"
               returnKeyType="next"
             />
 
             {/* Strength chips — shown after catalog selection */}
-            {selectedEntry && selectedEntry.strengths.length > 1 && (
+            {selectedEntry && selectedEntry.entry.strengths.length > 1 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sheet.chipScroll}>
-                {selectedEntry.strengths.map(strength => (
+                {selectedEntry.entry.strengths.map(strength => (
                   <TouchableOpacity
                     key={strength}
                     style={[sheet.chip, form.dose === strength && sheet.chipSelected]}
@@ -226,13 +224,15 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
               placeholderTextColor={Colors.textSecondary}
               value={form.route}
               onChangeText={patch('route')}
+              autoCorrect={false}
+              autoCapitalize="none"
               returnKeyType="next"
             />
 
             {/* Route chips — shown after catalog selection with multiple routes */}
-            {selectedEntry && selectedEntry.routes.length > 1 && (
+            {selectedEntry && selectedEntry.entry.routes.length > 1 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sheet.chipScroll}>
-                {selectedEntry.routes.map(route => (
+                {selectedEntry.entry.routes.map(route => (
                   <TouchableOpacity
                     key={route}
                     style={[sheet.chip, form.route === route && sheet.chipSelected]}
@@ -257,6 +257,8 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
               placeholderTextColor={Colors.textSecondary}
               value={form.frequency}
               onChangeText={patch('frequency')}
+              autoCorrect={false}
+              autoCapitalize="none"
               returnKeyType="done"
               blurOnSubmit
             />

@@ -61,7 +61,7 @@ export interface Medication {
   catalog_rxcui:   string | null;
 }
 
-export type NewMedication = Omit<Medication, 'id' | 'is_active' | 'created_at'>;
+export type NewMedication = Omit<Medication, 'id' | 'is_active' | 'created_at' | 'catalog_rxcui'> & { catalog_rxcui?: string | null };
 export type MedicationUpdate = Partial<Pick<Medication, 'name' | 'dose' | 'route' | 'frequency' | 'catalog_rxcui'>>;
 
 // ─── medication_doses ────────────────────────────────────────────────────────

@@ -63,28 +63,41 @@ export const MEDICATION_CATALOG: MedCatalogEntry[] = [ ... ];
 
 ## How Autocomplete Works
 
-The Add Medication form uses [Fuse.js](https://fusejs.io/) to search `genericName` and
-`brandNames` across the catalog as the user types. No async calls. No SQLite lookups.
-The catalog array is loaded once into a Fuse index when the form mounts.
+The Add Medication form uses a custom search module (`lib/medSearch.ts`) to search
+the catalog as the user types. No async calls. No SQLite lookups. The search index
+is built once from the catalog array when the form mounts.
+
+**Flat index with per-dose rows.** The index contains one row per (brand/generic name, strength)
+combination. Typing "ibuprofen" returns rows like "Ibuprofen · 200 mg", "Ibuprofen · 400 mg",
+"Ibuprofen · 600 mg", "Ibuprofen · 800 mg". Typing "advil" returns "Advil · 200 mg", etc.
+This lets the user select the exact dose from the autocomplete in one tap.
+
+**Scoring (in order of priority):**
+1. Exact match (score 100)
+2. Prefix match — query is a leading substring of the name (score 90)
+3. Word-start match — query matches the start of any word in the name (score 75; "ibup" → "Ibuprofen")
+4. Contains match (score 60)
+
+Generic items rank before brand items on equal scores. Shorter names rank before longer names
+on equal scores (so "Advil" ranks above "Advil Migraine" for the query "advil").
 
 **Entry-time use only:**
 
-1. User types in the Name field.
-2. Fuse returns up to 5 matches, shown as a suggestion list below the field.
+1. User types in the Name field (≥ 2 characters triggers search).
+2. Up to 5 suggestions appear below the field, each showing name · dose and a meta line
+   (drug class for generics; "generic name · drug class" for brands).
 3. User taps a suggestion. The form fills:
-   - Name field ← selected brand name (or generic name if no brand)
-   - Dose field ← pre-filled with `strengths[0]` as starting point
-   - Route field ← pre-filled with `routes[0]` as starting point
+   - Name field ← the suggestion's display name (generic or brand)
+   - Dose field ← the suggestion's strength (exact dose, already selected)
+   - Route field ← the most patient-relevant route for this drug (`oral` preferred over `injectable`)
    - Frequency field ← left empty (user fills this)
-4. User edits any pre-filled field as they see fit.
-5. User saves. The form values — whatever they are now — are written to SQLite as plain strings.
+4. Strength chips appear below the Dose field, showing all strengths for the selected drug.
+   The tapped dose is pre-highlighted. User can tap a different chip to change dose.
+5. Route chips appear below the Route field when the drug has multiple routes.
+6. User edits any pre-filled field as they see fit.
+7. User saves. The form values — whatever they are now — are written to SQLite as plain strings.
 
 After save, the catalog plays no role. The `medications` row holds the user's own strings.
-
-**Fuse.js configuration (starting point — tune empirically):**
-- Keys: `genericName` (weight 0.6), `brandNames` (weight 0.8)
-- Threshold: `0.3` (lower = stricter match, higher = fuzzier)
-- Max results: 5
 
 ---
 
@@ -159,6 +172,7 @@ maintenance/
     test_medications.py          # pytest quality-gate tests
     medications_whitelist.json   # Force-include / manual combination entries
     medications_blacklist.json   # Force-exclude entries
+    strength_whitelist.json      # Common clinical doses per RxCUI (overrides API strengths)
     requirements.txt
     setup.sh                     # Creates .venv and installs dependencies
     README.md
@@ -179,6 +193,37 @@ No file download required. Both APIs are queried at runtime (~80 HTTP requests,
 ~2 minutes). RxNorm bulk file downloads are avoided — they require UMLS license
 agreement even for the prescribable subset.
 
+### Brand Name Filtering (NDA filter)
+
+Every NDC record returned by the OpenFDA API includes an `application_number` field:
+- `NDA######` — FDA New Drug Application: innovator or brand-name drug (Advil, Tylenol, Motrin IB, Neurontin)
+- `ANDA######` — Abbreviated NDA: generic drug, store-brand, or private-label product (CVS Ibuprofen, Equate, 365 Whole Foods Market)
+
+The pipeline includes brand names **only from NDA records**. ANDA brand names are excluded regardless of market presence. This is the primary mechanism that keeps the autocomplete list clean across every regeneration.
+
+After the NDA filter, brand names are also filtered by `_is_clean_brand()`:
+- The brand name must not contain the generic ingredient name (filters "Ibuprofen 200 Mg" style entries)
+- The brand name must be ≤ 4 words (filters product description strings)
+- The brand name must not contain "And" (filters combination-product descriptions)
+
+These rules are permanent in `update_medications.py` and apply to every catalog regeneration automatically.
+
+### Strength Filtering
+
+Raw OpenFDA strengths include specialty formulations irrelevant to outpatient pain management (neonatal IV doses, concentrated injectables, compounding quantities). Two mechanisms keep the strengths list clinically useful:
+
+1. **NDA strengths + frequently-manufactured ANDA strengths.** The pipeline collects strengths from NDA records plus any ANDA strength that appears in ≥ 3 NDC records (indicating a commonly manufactured, clinically standard dose).
+
+2. **`strength_whitelist.json` overrides.** For the most commonly searched medications, this file specifies the exact standard clinical dose list. When a drug's RxCUI appears in the whitelist, its strength list is replaced entirely — API-derived strengths are discarded. This guarantees ibuprofen shows `[200 mg, 400 mg, 600 mg, 800 mg]` rather than including neonatal or injectable doses.
+
+To update a drug's strength list, edit `strength_whitelist.json` and re-run the pipeline. The format:
+
+```json
+[
+  { "rxcui": "5640", "note": "ibuprofen — standard oral doses", "strengths": ["200 mg", "400 mg", "600 mg", "800 mg"] }
+]
+```
+
 ### Pipeline Steps
 
 ```
@@ -190,20 +235,22 @@ For each ingredient in src/rxcui_classes.py INGREDIENT_CLASSES:
 2. Query OpenFDA NDC API for all NDC records matching that generic name
    GET api.fda.gov/drug/ndc.json?search=generic_name:"{name}"&limit=1000
 
-3. Extract from NDC records:
-   - brand_name → brandNames (title-cased, deduplicated, generic excluded)
-   - active_ingredients[].strength → strengths (normalised to "200 mg" form)
+3. Extract from NDC records, applying NDA filter:
+   - brand_name from NDA records only → brandNames (title-cased, deduplicated, _is_clean_brand check)
+   - active_ingredients[].strength → strengths (NDA-sourced + ANDA strengths with ≥3 records)
    - route[] → routes (mapped to canonical values: oral, topical, injectable, ...)
 
-4. Skip entry if no strengths or no routes found
+4. Apply strength_whitelist.json overrides (replace strengths for whitelisted RxCUIs)
 
-5. Apply whitelist (medications_whitelist.json): force-include entries + combinations
-6. Apply blacklist (medications_blacklist.json): remove entries by RXCUI
-7. Validate output (see test criteria below)
-8. Write constants/medicationCatalog.ts
+5. Skip entry if no strengths or no routes found
+
+6. Apply medications_whitelist.json: force-include entries + combinations (drug class override)
+7. Apply medications_blacklist.json: remove entries by RXCUI
+8. Validate output (see test criteria below)
+9. Write constants/medicationCatalog.ts
 ```
 
-### Whitelist / Blacklist Format
+### Whitelist / Blacklist / Strength Override Format
 
 ```json
 // medications_whitelist.json
@@ -217,15 +264,17 @@ For each ingredient in src/rxcui_classes.py INGREDIENT_CLASSES:
 
 // medications_blacklist.json
 [
-  {
-    "rxcui": "789012",
-    "reason": "Recalled / not appropriate for this app"
-  }
+  { "rxcui": "789012", "reason": "Recalled / not appropriate for this app" }
+]
+
+// strength_whitelist.json
+[
+  { "rxcui": "5640", "note": "ibuprofen — standard oral doses", "strengths": ["200 mg", "400 mg", "600 mg", "800 mg"] }
 ]
 ```
 
-Whitelist and blacklist entries are version-controlled in the repo alongside the script.
-Changes to either file require a new script run + commit of the updated catalog.
+All three files are version-controlled in the repo alongside the script.
+Changes to any file require a new script run + commit of the updated catalog.
 
 ### Test Criteria
 

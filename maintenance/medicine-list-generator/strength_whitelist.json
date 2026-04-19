@@ -1,0 +1,84 @@
+[
+  {
+    "rxcui": "161",
+    "note": "acetaminophen — Tylenol uses OTC Drug Monograph (M013), not NDA, so NDA filter misses it",
+    "strengths": ["325 mg", "500 mg", "650 mg", "1000 mg"],
+    "additionalBrands": ["Tylenol", "Tylenol Extra Strength"]
+  },
+  {
+    "rxcui": "1191",
+    "note": "aspirin — low-dose cardio + OTC analgesic doses",
+    "strengths": ["81 mg", "325 mg", "500 mg", "650 mg"]
+  },
+  {
+    "rxcui": "5640",
+    "note": "ibuprofen — standard oral doses (200 OTC, 400/600/800 Rx); Motrin IB is ANDA077349 so NDA filter misses it",
+    "strengths": ["200 mg", "400 mg", "600 mg", "800 mg"],
+    "additionalBrands": ["Motrin IB"]
+  },
+  {
+    "rxcui": "7258",
+    "note": "naproxen — 220 OTC (Aleve), 250/375/500 Rx",
+    "strengths": ["220 mg", "250 mg", "375 mg", "500 mg"]
+  },
+  {
+    "rxcui": "140587",
+    "note": "celecoxib — standard Rx doses",
+    "strengths": ["100 mg", "200 mg", "400 mg"]
+  },
+  {
+    "rxcui": "3355",
+    "note": "diclofenac — standard oral Rx doses",
+    "strengths": ["25 mg", "50 mg", "75 mg", "100 mg"]
+  },
+  {
+    "rxcui": "41493",
+    "note": "tramadol — IR and common ER doses",
+    "strengths": ["50 mg", "100 mg", "150 mg", "200 mg", "300 mg"]
+  },
+  {
+    "rxcui": "7804",
+    "note": "oxycodone — standard oral doses",
+    "strengths": ["5 mg", "10 mg", "15 mg", "20 mg", "30 mg", "40 mg", "80 mg"]
+  },
+  {
+    "rxcui": "7052",
+    "note": "morphine — standard oral doses (IR and ER)",
+    "strengths": ["10 mg", "15 mg", "30 mg", "60 mg", "100 mg", "200 mg"]
+  },
+  {
+    "rxcui": "25480",
+    "note": "gabapentin — standard oral doses",
+    "strengths": ["100 mg", "300 mg", "400 mg", "600 mg", "800 mg"]
+  },
+  {
+    "rxcui": "187832",
+    "note": "pregabalin — standard oral doses",
+    "strengths": ["25 mg", "50 mg", "75 mg", "100 mg", "150 mg", "200 mg", "225 mg", "300 mg"]
+  },
+  {
+    "rxcui": "21949",
+    "note": "cyclobenzaprine — standard oral doses",
+    "strengths": ["5 mg", "7.5 mg", "10 mg"]
+  },
+  {
+    "rxcui": "1292",
+    "note": "baclofen — standard oral doses",
+    "strengths": ["5 mg", "10 mg", "20 mg"]
+  },
+  {
+    "rxcui": "203168",
+    "note": "amitriptyline — standard doses (low doses used for pain)",
+    "strengths": ["10 mg", "25 mg", "50 mg", "75 mg", "100 mg", "150 mg"]
+  },
+  {
+    "rxcui": "476250",
+    "note": "duloxetine — standard doses",
+    "strengths": ["20 mg", "30 mg", "60 mg"]
+  },
+  {
+    "rxcui": "142439",
+    "note": "hydrocodone — standard oral doses (typically in combination)",
+    "strengths": ["5 mg", "7.5 mg", "10 mg"]
+  }
+]

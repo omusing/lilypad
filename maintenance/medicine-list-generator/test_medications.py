@@ -42,7 +42,7 @@ REQUIRED_GENERICS = [
     "amitriptyline",
 ]
 
-STRENGTH_RE = re.compile(r"^\d+(?:\.\d+)?(?:/\d+(?:\.\d+)?)?\s+\S+$")
+STRENGTH_RE = re.compile(r"^\d+(?:\.\d+)?\s+\S+(?:\s*/\s*\d+(?:\.\d+)?\s+\S+)*$")
 ROUTE_RE    = re.compile(r"^[a-z]+$")
 
 
@@ -61,7 +61,8 @@ def _parse_catalog() -> list[dict]:
         raise ValueError("Could not locate MEDICATION_CATALOG array in output file")
 
     array_text = m.group(1)
-    array_text = re.sub(r",(\s*[}\]])", r"\1", array_text)  # strip trailing commas
+    array_text = re.sub(r",(\s*[}\]])", r"\1", array_text)          # strip trailing commas
+    array_text = re.sub(r'([{,])\s*([a-zA-Z_]\w*)\s*:', r'\1 "\2":', array_text)  # quote unquoted keys
     return json.loads(array_text)
 
 
@@ -146,6 +147,17 @@ def test_route_format(catalog):
 def test_sorted_by_generic_name(catalog):
     names = [e["genericName"] for e in catalog]
     assert names == sorted(names), "Catalog is not sorted by genericName"
+
+
+def test_brand_name_quality(catalog):
+    for e in catalog:
+        for brand in e.get("brandNames", []):
+            assert e["genericName"].lower() not in brand.lower(), (
+                f"{e['genericName']}: brand '{brand}' contains the generic name"
+            )
+            assert len(brand.split()) <= 4, (
+                f"{e['genericName']}: brand '{brand}' has >4 words (likely a product description, not a brand)"
+            )
 
 
 def test_whitelist_combinations_present(catalog):

@@ -24,9 +24,16 @@ SRC_DIR   = Path(__file__).parent
 TOOL_DIR  = SRC_DIR.parent
 REPO_ROOT = TOOL_DIR.parent.parent
 
-OUTPUT_PATH    = REPO_ROOT / "constants" / "medicationCatalog.ts"
-WHITELIST_PATH = TOOL_DIR / "medications_whitelist.json"
-BLACKLIST_PATH = TOOL_DIR / "medications_blacklist.json"
+OUTPUT_PATH             = REPO_ROOT / "constants" / "medicationCatalog.ts"
+WHITELIST_PATH          = TOOL_DIR / "medications_whitelist.json"
+BLACKLIST_PATH          = TOOL_DIR / "medications_blacklist.json"
+STRENGTH_WHITELIST_PATH = TOOL_DIR / "strength_whitelist.json"
+
+# Maximum words in a brand name. Longer strings are product descriptions, not brand names.
+MAX_BRAND_WORDS = 4
+# An ANDA strength must appear in at least this many NDC records to be included
+# (catches commonly manufactured generic doses not covered by an NDA record).
+MIN_ANDA_STRENGTH_COUNT = 3
 
 RXNORM_API  = "https://rxnav.nlm.nih.gov/REST"
 OPENFDA_API = "https://api.fda.gov/drug/ndc.json"
@@ -84,6 +91,24 @@ def fetch_ndc_records(generic_name: str, session: requests.Session) -> list[dict
         return []
 
 
+# Abbreviations that should stay fully uppercase in brand names.
+# .title() converts "PM" → "Pm", "ER" → "Er", etc. — wrong for drug brand names.
+_UPPER_ABBREVS = frozenset({
+    'PM', 'AM', 'ER', 'IR', 'XR', 'SR', 'CR', 'DR', 'XL', 'LA',
+    'IV', 'DM', 'PE', 'IB', 'HBP', 'HCL', 'HBR', 'DS', 'XS',
+})
+
+
+def _title_brand(s: str) -> str:
+    """Title-case a brand name, keeping known abbreviations uppercase."""
+    parts = []
+    for word in s.split():
+        stripped = word.rstrip(',.;-')
+        suffix   = word[len(stripped):]
+        parts.append((stripped.upper() if stripped.upper() in _UPPER_ABBREVS else stripped.capitalize()) + suffix)
+    return ' '.join(parts)
+
+
 def _normalize_strength(raw: str) -> Optional[str]:
     """
     '200 MG/1'        → '200 mg'
@@ -116,33 +141,78 @@ def _strength_sort_key(s: str) -> float:
     return float(m.group(1)) if m else 0.0
 
 
+def _is_clean_brand(brand: str, generic_name: str) -> bool:
+    """Return True if brand looks like a genuine consumer brand name.
+
+    Filters out store/private-label brands, generic-labeled products,
+    combination-product descriptions, and pediatric formulations.
+    """
+    import re
+    # Contains the ingredient name — it's just a labeled generic ("Ibuprofen 200 Mg")
+    if generic_name.lower() in brand.lower():
+        return False
+    # More than MAX_BRAND_WORDS words — it's a product description, not a brand
+    if len(brand.split()) > MAX_BRAND_WORDS:
+        return False
+    # Contains "And" — combination product description, not a consumer brand name
+    if re.search(r'\bAnd\b', brand):
+        return False
+    # Pediatric/infant formulations — not relevant for adult pain management
+    if re.search(r'\b(children|childrens|infant|infants|junior|kids|pediatric|peds)\b', brand, re.IGNORECASE):
+        return False
+    return True
+
+
 def extract_from_ndc(records: list[dict], generic_name: str) -> dict:
-    """Aggregate brand names, strengths, routes from a set of NDC records."""
-    brands:    set[str] = set()
-    strengths: set[str] = set()
-    routes:    set[str] = set()
+    """Aggregate brand names, strengths, routes from NDC records.
+
+    Brand names: NDA records only (innovator/brand-name drugs). ANDA records
+    (generics, store brands, private label) are excluded. Combination-product
+    brands (e.g. Advil Allergy Sinus, Advil PM) remain in the brand list for
+    the parent generic; they should be added as their own whitelist entries if
+    full catalog coverage is needed.
+
+    Strengths: NDA-sourced strengths plus any ANDA strength appearing in at least
+    MIN_ANDA_STRENGTH_COUNT records (commonly manufactured = commonly prescribed).
+    """
+    nda_brands:          set[str]       = set()
+    nda_strengths:       set[str]       = set()
+    anda_strength_counts: dict[str, int] = {}
+    routes:              set[str]       = set()
 
     for r in records:
-        # Brand name
-        brand = r.get("brand_name", "").strip().title()
-        if brand and brand.lower() != generic_name.lower():
-            brands.add(brand)
+        app_num = r.get("application_number", "")
+        is_nda  = isinstance(app_num, str) and app_num.upper().startswith("NDA")
 
-        # Strengths from active_ingredients
+        # Only include brand names from single-ingredient NDA products.
+        # Multi-ingredient NDA products (e.g. Excedrin under aspirin) would create
+        # wrong (brand, single-ingredient-strength) pairs in the flat search index.
+        is_single_ingredient = len(r.get("active_ingredients", [])) == 1
+        brand = _title_brand(r.get("brand_name", "").strip())
+        if brand and is_nda and is_single_ingredient and _is_clean_brand(brand, generic_name):
+            nda_brands.add(brand)
+
         for ai in r.get("active_ingredients", []):
             s = _normalize_strength(ai.get("strength", ""))
             if s:
-                strengths.add(s)
+                if is_nda:
+                    nda_strengths.add(s)
+                else:
+                    anda_strength_counts[s] = anda_strength_counts.get(s, 0) + 1
 
-        # Routes
         for route_raw in r.get("route", []):
             mapped = _normalize_route(route_raw)
             if mapped:
                 routes.add(mapped)
 
+    all_strengths = nda_strengths | {
+        s for s, count in anda_strength_counts.items()
+        if count >= MIN_ANDA_STRENGTH_COUNT
+    }
+
     return {
-        "brandNames": sorted(brands),
-        "strengths":  sorted(strengths, key=_strength_sort_key),
+        "brandNames": sorted(nda_brands),
+        "strengths":  sorted(all_strengths, key=_strength_sort_key),
         "routes":     sorted(routes),
     }
 
@@ -153,10 +223,13 @@ def build_catalog(
     ingredient_classes: dict[str, str],
     whitelist: list[dict],
     blacklist: list[dict],
+    strength_whitelist: list[dict],
 ) -> list[dict]:
 
-    blacklist_set = {e["rxcui"] for e in blacklist}
-    whitelist_map = {e["rxcui"]: e for e in whitelist}
+    blacklist_set      = {e["rxcui"] for e in blacklist}
+    whitelist_map      = {e["rxcui"]: e for e in whitelist}
+    # Map rxcui → full whitelist entry (strengths + optional additionalBrands)
+    strength_overrides = {e["rxcui"]: e for e in strength_whitelist}
 
     session = requests.Session()
     session.headers["User-Agent"] = "Lilypad/catalog-builder (non-commercial, research use)"
@@ -195,6 +268,14 @@ def build_catalog(
         wl = whitelist_map.get(rxcui)
         if wl:
             drug_class = wl.get("drugClass", drug_class)
+
+        # Strength whitelist: override strengths and optionally inject known brands
+        # that use OTC Drug Monographs instead of NDAs (e.g. Tylenol → M013, not NDA)
+        if rxcui in strength_overrides:
+            override = strength_overrides[rxcui]
+            data["strengths"] = override["strengths"]
+            if "additionalBrands" in override:
+                data["brandNames"] = sorted(set(data["brandNames"]) | set(override["additionalBrands"]))
 
         print(f"    ✓ rxcui={rxcui}  brands={len(data['brandNames'])}  "
               f"strengths={data['strengths']}  routes={data['routes']}")
@@ -282,13 +363,15 @@ def main() -> None:
     sys.path.insert(0, str(SRC_DIR))
     from rxcui_classes import INGREDIENT_CLASSES
 
-    whitelist: list[dict] = json.loads(WHITELIST_PATH.read_text()) if WHITELIST_PATH.exists() else []
-    blacklist: list[dict] = json.loads(BLACKLIST_PATH.read_text()) if BLACKLIST_PATH.exists() else []
+    whitelist:          list[dict] = json.loads(WHITELIST_PATH.read_text())          if WHITELIST_PATH.exists()          else []
+    blacklist:          list[dict] = json.loads(BLACKLIST_PATH.read_text())          if BLACKLIST_PATH.exists()          else []
+    strength_whitelist: list[dict] = json.loads(STRENGTH_WHITELIST_PATH.read_text()) if STRENGTH_WHITELIST_PATH.exists() else []
 
     print(f"Building catalog for {len(INGREDIENT_CLASSES)} ingredients via RxNorm + OpenFDA APIs...")
     print("No download required — querying public APIs directly.\n")
+    print(f"  NDA filter: ON  |  strength overrides: {len(strength_whitelist)} entries\n")
 
-    catalog = build_catalog(INGREDIENT_CLASSES, whitelist, blacklist)
+    catalog = build_catalog(INGREDIENT_CLASSES, whitelist, blacklist, strength_whitelist)
     write_typescript(catalog, OUTPUT_PATH)
 
 
