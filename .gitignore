@@ -41,5 +41,6 @@ app-example
 # generated native folders
 /ios
 /android
-.claude/skills/gstack/
-.claude/skills/gstack/
+# local AI tooling (Claude Code, agent sessions)
+.claude/
+.agents/
