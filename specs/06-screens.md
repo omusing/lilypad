@@ -120,16 +120,54 @@ Reusable bottom sheet. Invoked from:
 **Layout:**
 - Sheet handle at top
 - Headline: "Add medication"
-- Fields (all on one scrollable form — this is a simple 4-field form, not a wizard):
-  - Name (text input, required, placeholder: "Medication name")
-  - Dose (text input, optional, placeholder: "e.g. 400mg")
-  - Route (text input, optional, placeholder: "e.g. oral, topical")
+- Fields (scrollable form):
+  - Name (text input, required, placeholder: "Medication name") — supports autocomplete (see below)
+  - Strength chips (horizontal scroll, appears only after a catalog selection — see below)
+  - Dose (text input, optional, placeholder: "e.g. 400mg") — pre-filled on catalog selection
+  - Route chips (horizontal scroll, appears only when catalog entry has multiple routes)
+  - Route (text input, optional, placeholder: "e.g. oral, topical") — pre-filled on catalog selection
   - Frequency (text input, optional, placeholder: "e.g. as needed, BID")
 - "Save" button (disabled until Name is filled)
 - "Cancel" link or swipe down to dismiss
 
-**On save:** insert into `medications` table (`is_active = 1`, `created_at` = now).
-Dismiss sheet. Caller receives the new medication (for pre-selection if invoked from wizard).
+**Autocomplete behavior:**
+
+The Name field supports inline autocomplete backed by the offline medication catalog
+([09-medicine-list.md](09-medicine-list.md)). Both brand names and generic names match.
+
+As the user types:
+- Up to 5 suggestions appear directly below the Name field.
+- Each suggestion shows: brand name (or generic if no brand) on the left, generic name
+  + drug class on the right. Example: `Advil   ibuprofen · NSAID`
+- Typing "Advil", "adv", "ibuprofen", or "ibu" all surface the same entry.
+
+On selecting a suggestion:
+- Name field fills with the selected brand name (e.g. "Advil") — not the partial query,
+  not the generic name. Whatever was in the suggestion's left column.
+- Strength chips appear below the Name field: one chip per available strength
+  (e.g. `200 mg` `400 mg` `600 mg` `800 mg`). Tapping a chip fills the Dose field.
+  The first strength is not auto-selected — the user must tap a chip or type manually.
+- Dose field pre-fills with the first available strength as a starting value.
+- Route field pre-fills with the first available route (e.g. "oral").
+- If the catalog entry has more than one route, route chips appear the same way as
+  strength chips. Tapping a chip overrides the Route field.
+- Frequency field remains empty.
+
+The user can override any pre-filled field at any time. Autocomplete is a convenience,
+not a gate. Medications not in the catalog can be entered entirely by free text — the
+suggestion list simply doesn't appear.
+
+**Edit flow:** When editing an existing medication, autocomplete is active on the Name
+field. The existing saved values are shown as starting state. If the user changes the
+Name, suggestions appear as in the add flow. Selecting a new catalog entry replaces
+the Name, clears the strength and route chips, and re-pre-fills Dose and Route from
+the new catalog entry. The user can still override.
+
+**On save:** insert (or update) `medications` row. Fields stored as plain strings
+exactly as they appear in the form at save time — no normalization, no catalog lookup.
+`catalog_rxcui` is stored if a catalog entry was selected; NULL for free-text entries.
+`is_active = 1`, `created_at` = now (on insert).
+Dismiss sheet. Caller receives the saved medication.
 
 **Validation:** Name is the only required field. Blank optional fields are saved as NULL.
 
@@ -203,9 +241,17 @@ nothing filled in, dismiss immediately.
 
 **Progress indicator:** step dots or a segmented bar at the top (1 of 5 through 5 of 5).
 
+**Previous selections:** On opening the wizard, load the most recent pain entry and
+soft-pre-select its regions, qualities, and triggers. Pain score is never pre-selected
+— the user must always make a conscious choice.
+
+**Chip ordering:** All multi-select chip sets (regions, qualities, triggers) are
+displayed in alphabetical order.
+
 **Navigation:** "Back" (top left, after step 1) and "Next" / "Submit" (bottom right).
-"Next" is always enabled — no step is required except pain score (step 1). Back
-preserves filled values.
+Back preserves filled values. Two steps have required selections before Next enables:
+step 1 (pain score) and step 2 (at least one region). All other steps' Next is always
+enabled.
 
 ---
 
@@ -306,7 +352,10 @@ Illness / infection, Unknown
 **On submit:**
 - Validate: pain_level is set (guaranteed by step 1 gate), pain_regions has ≥1 item.
 - Write entry to DB: `entry_date` = today (YYYY-MM-DD), `created_at` = precise
-  system timestamp, `updated_at` = NULL.
+  system timestamp, `updated_at` = NULL. Include `note` if provided in step 5.
+- For each medication checked in step 5: insert one `medication_doses` row
+  (`medication_id`, `taken_at` = same precise system timestamp as `created_at`,
+  `note` = NULL). These are shortcut dose records — identical to tapping "Took it now".
 - Dismiss wizard.
 - Show brief success toast: "Pain log saved."
 - Update Home activity summary ("Last logged: just now").

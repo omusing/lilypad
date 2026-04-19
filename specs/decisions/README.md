@@ -52,3 +52,7 @@ What to watch for in V1.1+ that might prompt revisiting.
 |---|-------|--------|
 | [001](001-check-in-cadence.md) | Check-in cadence: pain diary vs. medication tracker | Partially superseded by 002 |
 | [002](002-event-driven-logging.md) | Event-driven logging: replacing the BID data model | Decided |
+| [003](003-versioning-and-migrations.md) | App versioning, DB schema versioning, and migration policy | Superseded by 006 |
+| [004](004-medication-catalog-storage.md) | Medication catalog storage: TypeScript bundle vs. SQLite asset | Decided |
+| [005](005-medication-catalog-build-order.md) | Medication catalog build order: hand-author first vs. pipeline first | Decided |
+| [006](006-versioning-policy.md) | Versioning policy: migrations, testing, and release process | Active |

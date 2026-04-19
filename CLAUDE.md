@@ -10,6 +10,17 @@ All project specifications live in [`specs/`](specs/). Start with the index:
 - [specs/03-architecture.md](specs/03-architecture.md) — tech stack, folder structure, patterns
 - [specs/04-design-system.md](specs/04-design-system.md) — colors, typography, components
 
+## Design decisions and spec discipline
+
+`specs/` is the source of truth. gstack design docs in `~/.gstack/` are working notes only.
+
+Any session that evaluates alternatives and selects one must produce two outputs before it is done:
+1. An ADR in `specs/decisions/` documenting the options considered and the choice made.
+2. Updated spec file(s) reflecting the selected option.
+
+This applies regardless of which skill is running or what artifacts that skill generates.
+The session is not done until the specs are current.
+
 ## Dev Commands
 
 ```bash

@@ -163,6 +163,7 @@ db/
   medications.ts       # CRUD for medications + medication_doses
   settings.ts          # app_settings read/write
   migrate.ts           # Version-gated migration functions
+  seed.ts              # Dev-only: deterministic persona seeding (Client A, Jerry, Micky, Donny)
 
 hooks/
   useEntries.ts
@@ -176,11 +177,37 @@ lib/
   notifications.ts     # Schedule / cancel local notifications
 
 constants/
-  regions.ts           # Pain region labels (patient-facing 11)
-  qualities.ts         # Pain quality options (10)
-  triggers.ts          # Trigger options (12)
-  theme.ts             # Colors, fonts
+  regions.ts              # Pain region labels (patient-facing 11)
+  qualities.ts            # Pain quality options (10)
+  triggers.ts             # Trigger options (12)
+  theme.ts                # Colors, fonts
+  medicationCatalog.ts    # AUTO-GENERATED — see maintenance/medicine-list-generator/
 ```
+
+---
+
+## Maintenance Tools
+
+Offline scripts and pipelines that generate or update app assets. Not part of the
+app build — run manually when assets need refreshing. Each tool is a self-contained
+directory with its own README, setup script, and virtual environment.
+
+```
+maintenance/
+  medicine-list-generator/    # Generates constants/medicationCatalog.ts from RxNorm
+    src/
+      update_medications.py   # Pipeline: download RxNorm → parse → write .ts
+      rxcui_classes.py        # Seed: ingredient name → DrugClass
+    test_medications.py       # pytest quality gates (run before committing output)
+    medications_whitelist.json
+    medications_blacklist.json
+    requirements.txt
+    setup.sh
+    README.md
+```
+
+See [09-medicine-list.md](09-medicine-list.md) for full documentation of the
+medicine-list-generator tool.
 
 ---
 

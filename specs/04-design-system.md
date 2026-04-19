@@ -208,7 +208,8 @@ Replaces plain text + separate picker trigger.
 - Border-top: 1px `border`
 - Active icon + label: `brand` (`#2E7D5E`)
 - Inactive: `textSecondary`
-- 4 tabs: Home, History, Medications, Report
+- 5 tabs: Home, History, Log (center — "+" icon, no label), Medications, Report
+- Center "Log" tab is larger / visually distinct — it is the primary action entry point
 
 ---
 

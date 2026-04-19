@@ -67,25 +67,27 @@ The user's personal medication list. No delete — archive only.
 
 ```sql
 CREATE TABLE IF NOT EXISTS medications (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  name        TEXT    NOT NULL,
-  dose        TEXT,
-  route       TEXT,
-  frequency   TEXT,
-  is_active   INTEGER NOT NULL DEFAULT 1,
-  created_at  TEXT    NOT NULL
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  name            TEXT    NOT NULL,
+  dose            TEXT,
+  route           TEXT,
+  frequency       TEXT,
+  is_active       INTEGER NOT NULL DEFAULT 1,
+  created_at      TEXT    NOT NULL,
+  catalog_rxcui   TEXT
 );
 ```
 
 | Column | Type | Nullable | Notes |
 |---|---|---|---|
 | `id` | INTEGER | — | Auto-increment PK. **Device-local — do not expose in exports as a stable identifier.** Export uses remapping (see export schema below). |
-| `name` | TEXT | No | Medication name as entered by user. No normalization. |
+| `name` | TEXT | No | Medication name as entered by user. No normalization. Whatever was in the Name field at save time — brand name, generic name, or free text. |
 | `dose` | TEXT | Yes | e.g. `"400mg"`, `"10mg/5mL"`. Free text. |
 | `route` | TEXT | Yes | e.g. `"oral"`, `"topical"`, `"injection"`. Free text. |
 | `frequency` | TEXT | Yes | e.g. `"as needed"`, `"BID"`, `"TID"`. Free text, not an enum. |
 | `is_active` | INTEGER | No | `1` = active (shown), `0` = archived (hidden by default). Default `1`. No delete. |
 | `created_at` | TEXT | No | ISO 8601 timestamp at insert. |
+| `catalog_rxcui` | TEXT | Yes | RxNorm RXCUI of the catalog entry used at entry time, if the user selected from autocomplete. NULL for free-text entries. **Never used for display** — `name`, `dose`, `route` are always the source of truth. Reserved for future features (drug interaction lookup, export cross-referencing). Added in schema_version 2. |
 
 ---
 
@@ -132,7 +134,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
   evening_reminder  INTEGER NOT NULL DEFAULT 0,
   evening_time      TEXT    NOT NULL DEFAULT '20:00',
   onboarding_done   INTEGER NOT NULL DEFAULT 0,
-  schema_version    INTEGER NOT NULL DEFAULT 1
+  schema_version    INTEGER NOT NULL DEFAULT 0
 );
 ```
 
@@ -145,11 +147,14 @@ CREATE TABLE IF NOT EXISTS app_settings (
 | `evening_reminder` | INTEGER | No | `0` = off, `1` = on. Default `0`. |
 | `evening_time` | TEXT | No | HH:MM. Default `'20:00'`. Used to schedule the evening notification. |
 | `onboarding_done` | INTEGER | No | `0` = show onboarding on next launch, `1` = skip. Set at end of onboarding wizard. |
-| `schema_version` | INTEGER | No | Current DB schema version. Read by `db/migrate.ts` on every launch to determine which migrations to run. Starts at `1`. |
+| `schema_version` | INTEGER | No | Current DB schema version. Read by `db/migrate.ts` on every launch to determine which migrations to run. Initialized to `0` so all migrations run on fresh install; updated to `VERSIONS.db` after migrations complete. |
 
-**Initialization:** The row is inserted with defaults on first launch before any
-other DB access. `db/migrate.ts` reads `schema_version` from this row, runs any
-pending migrations in a transaction, and updates `schema_version` when done.
+**Initialization:** On first launch, if the `app_settings` table does not exist,
+it is created and a single row is inserted with all defaults (including
+`schema_version = 0`). This happens before `runMigrations()` is called.
+`db/migrate.ts` then reads `schema_version`, runs all pending migrations in a
+transaction, and updates `schema_version` to `VERSIONS.db` when done. See
+[10-versioning.md § Migration Runner](10-versioning.md) for the full bootstrap sequence.
 
 ---
 
@@ -231,7 +236,8 @@ Full schema used by `lib/export.ts` and validated by `lib/import.ts`.
       "dose": "400mg",
       "route": "oral",
       "frequency": "as needed",
-      "is_active": 1
+      "is_active": 1,
+      "catalog_rxcui": "5640"
     }
   ],
   "medication_doses": [

@@ -1,7 +1,12 @@
 # 003 — App versioning, DB schema versioning, and migration policy
 
-**Status:** Active  
+**Status:** Superseded by [006-versioning-policy.md](006-versioning-policy.md)  
 **Date:** 2026-04-17
+
+> **Do not follow the checklists or testing policy in this document.** They are
+> outdated. The canonical operational spec is [10-versioning.md](../10-versioning.md).
+> The decisions behind it are in [006-versioning-policy.md](006-versioning-policy.md).
+> This file is kept as historical context only.
 
 ---
 
@@ -103,10 +108,10 @@ Do NOT increment it when:
 - A new optional field is added (importers skip unknown keys)
 - The schema version changes without affecting the export format
 
-`lib/import.ts` must handle at minimum the current `export_version` and
-one prior. Older versions: surface a user-facing error ("This backup was
-created with an older version of Lilypad that is no longer supported for import.
-Please update the app that created this backup.").
+`lib/import.ts` must handle every `export_version` ever released. All converters
+ship in every build. There is no minimum supported export version. This supersedes
+the earlier "current + one prior" rule documented here — see [10-versioning.md](../10-versioning.md)
+for the canonical policy.
 
 ---
 

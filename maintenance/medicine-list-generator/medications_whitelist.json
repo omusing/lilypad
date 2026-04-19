@@ -1,0 +1,29 @@
+[
+  {
+    "rxcui": "857005",
+    "reason": "Vicodin — hydrocodone/acetaminophen combination, extremely common for pain",
+    "genericName": "hydrocodone / acetaminophen",
+    "brandNames": ["Vicodin", "Norco", "Lortab"],
+    "strengths": ["5 mg / 300 mg", "5 mg / 325 mg", "7.5 mg / 325 mg", "10 mg / 325 mg"],
+    "routes": ["oral"],
+    "drugClass": "Combination"
+  },
+  {
+    "rxcui": "724614",
+    "reason": "Percocet — oxycodone/acetaminophen combination, very common for moderate-severe pain",
+    "genericName": "oxycodone / acetaminophen",
+    "brandNames": ["Percocet", "Endocet", "Roxicet"],
+    "strengths": ["5 mg / 325 mg", "7.5 mg / 325 mg", "10 mg / 325 mg"],
+    "routes": ["oral"],
+    "drugClass": "Combination"
+  },
+  {
+    "rxcui": "835564",
+    "reason": "Advil PM — ibuprofen/diphenhydramine, common OTC sleep+pain",
+    "genericName": "ibuprofen / diphenhydramine",
+    "brandNames": ["Advil PM", "Motrin PM"],
+    "strengths": ["200 mg / 25 mg"],
+    "routes": ["oral"],
+    "drugClass": "Combination"
+  }
+]

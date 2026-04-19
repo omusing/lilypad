@@ -43,7 +43,7 @@ All personas include named patient in `app_settings.patient_name`.
 - `patient_name`: "Alex"
 - **Medications:** Ibuprofen 200mg, oral
 - **Pain entries:** 20 entries, pain 3–6, region: head
-  - Spread pseudo-randomly across the past 30 days (not evenly spaced)
+  - Spread across the past 30 days using fixed offsets (not evenly spaced)
   - Times: mid-morning to evening (09:00–20:00)
 - **Dose logs:** 20 doses of Ibuprofen, each within 10–30 minutes after the
   corresponding pain entry
@@ -72,7 +72,7 @@ All personas include named patient in `app_settings.patient_name`.
   pain levels: [5,7,3,0,6,4,7,3,5,6,0,4,7], region: abdomen
   - Includes 0s (logs when he remembers, not only when it's bad)
 - **Dose logs:** ~7 doses, distributed across about half the pain entries,
-  picking medications pseudo-randomly from the 5 above. A few dose logs on
+  picking medications via fixed assignment from the 5 above. A few dose logs on
   days with no pain entry.
 
 ---

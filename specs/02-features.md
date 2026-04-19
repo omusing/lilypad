@@ -27,18 +27,17 @@ as rarely as their experience warrants. See
 Note: medication is no longer a field in the pain log. See "Log Medication" below
 for how the two flows connect.
 
-**Input method:** 4-step wizard (down from 5 — medication step removed). One topic
-per screen, progress indicator, guided flow. Suitable for first-time users and users
-who find forms overwhelming.
+**Input method:** 5-step wizard. One topic per screen, progress indicator, guided
+flow. Suitable for first-time users and users who find forms overwhelming.
 
 Steps:
 1. Pain score (required — Next disabled until selected)
 2. Body regions (required — Next disabled until at least one selected)
 3. Pain quality + triggers (optional — Next always enabled)
-4. Mood + sleep + note (optional) — two exit actions: **"Save pain log"** and
-   **"Save and log medication"**. The second saves the pain entry and immediately
-   opens the medication log wizard. This is the only connection point between the
-   two flows, making the separation explicit.
+4. Mood + sleep (optional)
+5. Medications shortcut + note (optional) — final screen. Submit action: **"Save
+   Pain Log"**. The medications section is a convenience shortcut; the canonical
+   dose record is the dedicated Log Medication flow.
 
 The minimum case (pain score + location only) must be completable in under 60 seconds.
 
@@ -89,21 +88,12 @@ Accessible via:
 
 ### History / Records
 
-Two-column scrollable layout. Pain entries in the left column, medication dose events
-in the right column. Both columns scroll together (single scroll surface). Columns are
-color-coded to the app's semantic split: pain column uses the red family, medication
-column uses the green family.
+Scrollable list of pain entries, grouped by date (date header rows), newest first.
+Each row: time, pain level badge (color-coded), top 2–3 regions, mood emoji (if logged).
+Tap row → Entry Detail.
 
-Rows are loosely time-aligned by day — each day's events appear at the same vertical
-position across both columns, making the pain/medication relationship visible at a glance.
-
-**Pain column (left):**
-- Pain level badge (PainScale color), time, top regions
-- Tap → Entry Detail
-
-**Medication column (right):**
-- Medication name, dose count, time
-- Tap → dose detail (read-only, V1)
+Medication dose history is accessible through the Medications tab (per-medication
+dose log in Medication Detail), not surfaced in the History list.
 
 **Adding from History:**
 Users can add a new pain entry directly from the History screen. Useful for catch-up
@@ -224,7 +214,7 @@ fields that are self-evident (e.g. what a name field is for).
 - Load persona: Donny (medication-focused, minimal pain logging)
 - Load persona: Client A (30 days, head pain 3–6, Ibuprofen)
 
-See `specs/feedback.md` Developer Tools section for full persona definitions.
+See [specs/08-dev-tools.md](08-dev-tools.md) for full persona definitions.
 
 ---
 
