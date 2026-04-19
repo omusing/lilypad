@@ -40,27 +40,29 @@ export type EntryUpdate = Partial<Omit<Entry, 'id' | 'created_at'>>;
 // ─── medications ────────────────────────────────────────────────────────────
 
 export interface MedicationRow {
-  id:         number;
-  name:       string;
-  dose:       string | null;
-  route:      string | null;
-  frequency:  string | null;
-  is_active:  number;   // 1 | 0
-  created_at: string;
+  id:              number;
+  name:            string;
+  dose:            string | null;
+  route:           string | null;
+  frequency:       string | null;
+  is_active:       number;   // 1 | 0
+  created_at:      string;
+  catalog_rxcui:   string | null;
 }
 
 export interface Medication {
-  id:         number;
-  name:       string;
-  dose:       string | null;
-  route:      string | null;
-  frequency:  string | null;
-  is_active:  boolean;
-  created_at: string;
+  id:              number;
+  name:            string;
+  dose:            string | null;
+  route:           string | null;
+  frequency:       string | null;
+  is_active:       boolean;
+  created_at:      string;
+  catalog_rxcui:   string | null;
 }
 
 export type NewMedication = Omit<Medication, 'id' | 'is_active' | 'created_at'>;
-export type MedicationUpdate = Partial<Pick<Medication, 'name' | 'dose' | 'route' | 'frequency'>>;
+export type MedicationUpdate = Partial<Pick<Medication, 'name' | 'dose' | 'route' | 'frequency' | 'catalog_rxcui'>>;
 
 // ─── medication_doses ────────────────────────────────────────────────────────
 
@@ -108,7 +110,7 @@ export function rowToEntry(row: EntryRow): Entry {
 }
 
 export function rowToMedication(row: MedicationRow): Medication {
-  return { ...row, is_active: row.is_active === 1 };
+  return { ...row, is_active: row.is_active === 1, catalog_rxcui: row.catalog_rxcui ?? null };
 }
 
 export function rowToSettings(row: SettingsRow): Settings {

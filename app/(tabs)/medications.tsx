@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, TextInput,
   StyleSheet, Modal, Alert, KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Fuse from 'fuse.js';
 
 import {
   Colors, FontFamily, FontSize, Spacing, Radius, Shadow, TouchTarget,
@@ -17,6 +18,7 @@ import {
 import { getTodayDoseCountByMedication, getLastDoseByMedication } from '@/db/doses';
 import type { Medication } from '@/db/schema';
 import { timeAgo } from '@/lib/time';
+import { MEDICATION_CATALOG, type MedCatalogEntry } from '@/constants/medicationCatalog';
 
 // ─── Form state ───────────────────────────────────────────────────────────────
 
@@ -39,11 +41,14 @@ interface SheetProps {
 }
 
 function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
-  const [form, setForm]         = useState<FormData>(EMPTY_FORM);
-  const [saving, setSaving]     = useState(false);
-  const [nameError, setNameError] = useState(false);
+  const [form, setForm]               = useState<FormData>(EMPTY_FORM);
+  const [saving, setSaving]           = useState(false);
+  const [nameError, setNameError]     = useState(false);
+  const [suggestions, setSuggestions] = useState<MedCatalogEntry[]>([]);
+  const [selectedEntry, setSelectedEntry] = useState<MedCatalogEntry | null>(null);
+  const fuseRef = useRef<Fuse<MedCatalogEntry> | null>(null);
 
-  // Populate form when opening for edit
+  // Build Fuse index and reset state on modal open
   const handleOpen = useCallback(() => {
     setForm(
       editing
@@ -51,6 +56,15 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
         : EMPTY_FORM
     );
     setNameError(false);
+    setSuggestions([]);
+    setSelectedEntry(null);
+    fuseRef.current = new Fuse(MEDICATION_CATALOG, {
+      keys: [
+        { name: 'genericName', weight: 0.6 },
+        { name: 'brandNames',  weight: 0.8 },
+      ],
+      threshold: 0.3,
+    });
   }, [editing]);
 
   async function handleSave() {
@@ -62,9 +76,13 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
         dose:      form.dose.trim()      || null,
         route:     form.route.trim()     || null,
         frequency: form.frequency.trim() || null,
+        catalog_rxcui: selectedEntry?.rxcui ?? null,
       };
       if (editing) {
-        await updateMedication(editing.id, payload);
+        await updateMedication(editing.id, {
+          name: payload.name, dose: payload.dose, route: payload.route, frequency: payload.frequency,
+          ...(selectedEntry ? { catalog_rxcui: selectedEntry.rxcui } : {}),
+        });
       } else {
         await insertMedication(payload);
       }
@@ -77,8 +95,28 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
   function patch(key: keyof FormData) {
     return (val: string) => {
       setForm(f => ({ ...f, [key]: val }));
-      if (key === 'name') setNameError(false);
+      if (key === 'name') {
+        setNameError(false);
+        if (selectedEntry) setSelectedEntry(null);
+        setSuggestions(
+          val.length >= 2 && fuseRef.current
+            ? fuseRef.current.search(val).slice(0, 5).map(r => r.item)
+            : []
+        );
+      }
     };
+  }
+
+  function selectCatalogEntry(entry: MedCatalogEntry) {
+    const displayName = entry.brandNames[0] ?? entry.genericName;
+    setForm(f => ({
+      ...f,
+      name:  displayName,
+      dose:  entry.strengths[0] ?? f.dose,
+      route: entry.routes[0]    ?? f.route,
+    }));
+    setSelectedEntry(entry);
+    setSuggestions([]);
   }
 
   return (
@@ -126,6 +164,27 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
             />
             {nameError && <Text style={sheet.errorText}>Name is required</Text>}
 
+            {/* Autocomplete suggestions */}
+            {suggestions.length > 0 && (
+              <View style={sheet.suggestions}>
+                {suggestions.map(entry => (
+                  <TouchableOpacity
+                    key={entry.rxcui}
+                    style={sheet.suggestionRow}
+                    onPress={() => selectCatalogEntry(entry)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={sheet.suggestionName}>
+                      {entry.brandNames[0] ?? entry.genericName}
+                    </Text>
+                    <Text style={sheet.suggestionMeta}>
+                      {entry.genericName !== (entry.brandNames[0] ?? '') ? `${entry.genericName} · ` : ''}{entry.drugClass}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
             {/* Dose */}
             <Text style={[sheet.label, { marginTop: Spacing.md }]}>
               Dose <Text style={sheet.optional}>(optional)</Text>
@@ -139,6 +198,24 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
               returnKeyType="next"
             />
 
+            {/* Strength chips — shown after catalog selection */}
+            {selectedEntry && selectedEntry.strengths.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sheet.chipScroll}>
+                {selectedEntry.strengths.map(strength => (
+                  <TouchableOpacity
+                    key={strength}
+                    style={[sheet.chip, form.dose === strength && sheet.chipSelected]}
+                    onPress={() => setForm(f => ({ ...f, dose: strength }))}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[sheet.chipText, form.dose === strength && sheet.chipTextSelected]}>
+                      {strength}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
             {/* Route */}
             <Text style={[sheet.label, { marginTop: Spacing.md }]}>
               Route <Text style={sheet.optional}>(optional)</Text>
@@ -151,6 +228,24 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
               onChangeText={patch('route')}
               returnKeyType="next"
             />
+
+            {/* Route chips — shown after catalog selection with multiple routes */}
+            {selectedEntry && selectedEntry.routes.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={sheet.chipScroll}>
+                {selectedEntry.routes.map(route => (
+                  <TouchableOpacity
+                    key={route}
+                    style={[sheet.chip, form.route === route && sheet.chipSelected]}
+                    onPress={() => setForm(f => ({ ...f, route }))}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[sheet.chipText, form.route === route && sheet.chipTextSelected]}>
+                      {route}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
 
             {/* Frequency */}
             <Text style={[sheet.label, { marginTop: Spacing.md }]}>
@@ -202,6 +297,36 @@ const sheet = StyleSheet.create({
   },
   inputError: { borderWidth: 1.5, borderColor: Colors.pain },
   errorText:  { fontFamily: FontFamily.sans, fontSize: FontSize.label, color: Colors.pain, marginTop: 4 },
+
+  suggestions: {
+    backgroundColor: Colors.card,
+    borderRadius: Radius.card,
+    marginTop: 4,
+    ...Shadow.card,
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  suggestionName: { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.text, fontWeight: '500' },
+  suggestionMeta: { fontFamily: FontFamily.sans, fontSize: FontSize.label, color: Colors.textSecondary, marginTop: 2 },
+
+  chipScroll: { marginTop: Spacing.sm },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.chip,
+    backgroundColor: Colors.card,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    marginRight: Spacing.xs,
+  },
+  chipSelected: { backgroundColor: Colors.medLight, borderColor: Colors.med },
+  chipText: { fontFamily: FontFamily.sans, fontSize: FontSize.bodySmall, color: Colors.text },
+  chipTextSelected: { color: Colors.med, fontWeight: '600' },
 });
 
 // ─── Screen ───────────────────────────────────────────────────────────────────

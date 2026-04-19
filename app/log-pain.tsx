@@ -12,7 +12,8 @@ import { REGIONS } from '@/constants/regions';
 import { QUALITIES } from '@/constants/qualities';
 import { TRIGGERS } from '@/constants/triggers';
 import { getMedications } from '@/db/medications';
-import { insertEntry } from '@/db/entries';
+import { insertEntry, getLatestEntry } from '@/db/entries';
+import { logDoseNow } from '@/db/doses';
 import type { Medication } from '@/db/schema';
 
 // ─── Wizard state ─────────────────────────────────────────────────────────────
@@ -350,6 +351,18 @@ export default function LogPainScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
 
+  useEffect(() => {
+    getLatestEntry().then(entry => {
+      if (!entry) return;
+      setData(d => ({
+        ...d,
+        pain_regions:   entry.pain_regions,
+        pain_qualities: entry.pain_qualities,
+        triggers:       entry.triggers,
+      }));
+    }).catch(console.error);
+  }, []);
+
   function patch<K extends keyof WizardData>(key: K, val: WizardData[K]) {
     setData(d => ({ ...d, [key]: val }));
   }
@@ -392,6 +405,10 @@ export default function LogPainScreen() {
         medication_ids: data.medication_ids,
         note:           data.note.trim() || null,
       });
+      // Best-effort dose log — failures are silent; pain entry is already saved.
+      if (data.medication_ids.length > 0) {
+        await Promise.allSettled(data.medication_ids.map(id => logDoseNow(id)));
+      }
       setToastVisible(true);
       setTimeout(() => router.back(), 1600);
     } catch (e) {

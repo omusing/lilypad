@@ -10,9 +10,9 @@ function now(): string {
 export async function insertMedication(data: NewMedication): Promise<Medication> {
   const db = await getDb();
   const result = await db.runAsync(
-    `INSERT INTO medications (name, dose, route, frequency, created_at)
-     VALUES (?, ?, ?, ?, ?)`,
-    [data.name, data.dose ?? null, data.route ?? null, data.frequency ?? null, now()]
+    `INSERT INTO medications (name, dose, route, frequency, catalog_rxcui, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [data.name, data.dose ?? null, data.route ?? null, data.frequency ?? null, data.catalog_rxcui ?? null, now()]
   );
   const row = await db.getFirstAsync<MedicationRow>(
     'SELECT * FROM medications WHERE id = ?', [result.lastInsertRowId]
@@ -25,10 +25,11 @@ export async function updateMedication(id: number, data: MedicationUpdate): Prom
   const fields: string[] = [];
   const values: (string | null)[] = [];
 
-  if (data.name      !== undefined) { fields.push('name = ?');      values.push(data.name); }
-  if (data.dose      !== undefined) { fields.push('dose = ?');      values.push(data.dose); }
-  if (data.route     !== undefined) { fields.push('route = ?');     values.push(data.route); }
-  if (data.frequency !== undefined) { fields.push('frequency = ?'); values.push(data.frequency); }
+  if (data.name          !== undefined) { fields.push('name = ?');          values.push(data.name); }
+  if (data.dose          !== undefined) { fields.push('dose = ?');          values.push(data.dose); }
+  if (data.route         !== undefined) { fields.push('route = ?');         values.push(data.route); }
+  if (data.frequency     !== undefined) { fields.push('frequency = ?');     values.push(data.frequency); }
+  if (data.catalog_rxcui !== undefined) { fields.push('catalog_rxcui = ?'); values.push(data.catalog_rxcui); }
 
   if (fields.length === 0) return;
   values.push(String(id));

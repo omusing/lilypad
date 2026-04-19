@@ -103,6 +103,14 @@ export async function getEntriesInRange(fromDate: string, toDate: string): Promi
   return rows.map(rowToEntry);
 }
 
+export async function getLatestEntry(): Promise<Entry | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<EntryRow>(
+    'SELECT * FROM entries ORDER BY created_at DESC LIMIT 1'
+  );
+  return row ? rowToEntry(row) : null;
+}
+
 // Returns entries for the last N calendar days — used by the home sparkline.
 export async function getRecentEntries(days: number): Promise<Entry[]> {
   const fromDate = toDateString(new Date(Date.now() - (days - 1) * 86_400_000));

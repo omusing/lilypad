@@ -41,8 +41,10 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       );
     `,
   },
-  // Future migrations appended here, e.g.:
-  // { version: 2, sql: `ALTER TABLE entries ADD COLUMN ...` },
+  {
+    version: 2,
+    sql: `ALTER TABLE medications ADD COLUMN catalog_rxcui TEXT;`,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

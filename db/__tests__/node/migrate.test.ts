@@ -44,6 +44,10 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       );
     `,
   },
+  {
+    version: 2,
+    sql: `ALTER TABLE medications ADD COLUMN catalog_rxcui TEXT;`,
+  },
 ];
 
 // ─── Test helper ─────────────────────────────────────────────────────────────
@@ -67,8 +71,10 @@ function openFreshDb(): Database.Database {
   return db;
 }
 
-function runMigrations(db: Database.Database, fromVersion = 0): void {
-  const pending = MIGRATIONS.filter(m => m.version > fromVersion);
+function runMigrations(db: Database.Database, fromVersion = 0, toVersion?: number): void {
+  const pending = MIGRATIONS.filter(
+    m => m.version > fromVersion && (toVersion === undefined || m.version <= toVersion)
+  );
   if (pending.length === 0) return;
 
   db.transaction(() => {
@@ -109,8 +115,8 @@ describe('Migration v1 — fresh install', () => {
 
   afterEach(() => db.close());
 
-  test('schema_version is set to 1', () => {
-    expect(getSchemaVersion(db)).toBe(1);
+  test('schema_version is set to 2 (latest)', () => {
+    expect(getSchemaVersion(db)).toBe(2);
   });
 
   test('all four tables exist', () => {
@@ -161,9 +167,9 @@ describe('Migration idempotency', () => {
     const db = openFreshDb();
     expect(() => {
       runMigrations(db);
-      runMigrations(db); // second run — all versions already applied, should no-op
+      runMigrations(db, getSchemaVersion(db)); // second run — already at latest, no-op
     }).not.toThrow();
-    expect(getSchemaVersion(db)).toBe(1);
+    expect(getSchemaVersion(db)).toBe(2);
     db.close();
   });
 });
@@ -180,9 +186,7 @@ describe('Data survival across migrations', () => {
       VALUES ('2026-04-10', 7, '["lower_back","hips"]', '2026-04-10T09:00:00Z')
     `).run();
 
-    // Simulate a future migration (v2+) by just re-running current migrations
-    // In practice: add a v2 migration here and assert the row is intact after
-    runMigrations(db, 1); // no-op since already at v1
+    runMigrations(db, getSchemaVersion(db)); // no-op — already at latest
 
     const row = db.prepare('SELECT * FROM entries WHERE entry_date = ?').get('2026-04-10') as Record<string, unknown>;
     expect(row).toBeDefined();
@@ -199,7 +203,7 @@ describe('Data survival across migrations', () => {
       VALUES ('Ibuprofen', '400mg', 'oral', 'as needed', '2026-04-01T08:00:00Z')
     `).run();
 
-    runMigrations(db, 1); // no-op
+    runMigrations(db, getSchemaVersion(db)); // no-op — already at latest
 
     const row = db.prepare('SELECT * FROM medications WHERE name = ?').get('Ibuprofen') as Record<string, unknown>;
     expect(row).toBeDefined();
@@ -208,25 +212,43 @@ describe('Data survival across migrations', () => {
   });
 });
 
-// ─── Template for future migrations ──────────────────────────────────────────
-// When you add migration v2 to db/migrate.ts, copy this block and fill it in:
-//
-// describe('Migration v2 — <description>', () => {
-//   test('upgrades from v1 correctly', () => {
-//     const db = openFreshDb();
-//     runMigrations(db, 0);  // bring to v1
-//
-//     // Insert rows under v1 schema
-//     db.prepare(`INSERT INTO entries (...) VALUES (...)`).run();
-//
-//     runMigrations(db, 1);  // apply v2
-//     expect(getSchemaVersion(db)).toBe(2);
-//
-//     // Assert new column exists
-//     expect(columnExists(db, 'entries', 'new_column')).toBe(true);
-//
-//     // Assert old row is intact
-//     const row = db.prepare('SELECT * FROM entries WHERE ...').get();
-//     expect(row.new_column).toBe(<default value>);
-//   });
-// });
+describe('Migration v2 — catalog_rxcui on medications', () => {
+  test('upgrades from v1: catalog_rxcui column added, schema_version = 2', () => {
+    const db = openFreshDb();
+    runMigrations(db, 0, 1); // bring to v1 only
+    expect(getSchemaVersion(db)).toBe(1);
+    expect(columnExists(db, 'medications', 'catalog_rxcui')).toBe(false);
+
+    runMigrations(db, 1, 2); // apply v2
+    expect(getSchemaVersion(db)).toBe(2);
+    expect(columnExists(db, 'medications', 'catalog_rxcui')).toBe(true);
+    db.close();
+  });
+
+  test('existing medication row survives v1→v2, catalog_rxcui defaults to NULL', () => {
+    const db = openFreshDb();
+    runMigrations(db, 0, 1); // bring to v1 only
+
+    db.prepare(
+      `INSERT INTO medications (name, dose, route, frequency, created_at)
+       VALUES ('Ibuprofen', '400mg', 'oral', 'as needed', '2026-04-01T08:00:00Z')`
+    ).run();
+
+    runMigrations(db, 1, 2); // apply v2
+
+    const row = db.prepare('SELECT * FROM medications WHERE name = ?').get('Ibuprofen') as Record<string, unknown>;
+    expect(row).toBeDefined();
+    expect(row.dose).toBe('400mg');
+    expect(row.is_active).toBe(1);
+    expect(row.catalog_rxcui).toBeNull();
+    db.close();
+  });
+
+  test('fresh install at v2 has catalog_rxcui column', () => {
+    const db = openFreshDb();
+    runMigrations(db);
+    expect(getSchemaVersion(db)).toBe(2);
+    expect(columnExists(db, 'medications', 'catalog_rxcui')).toBe(true);
+    db.close();
+  });
+});
