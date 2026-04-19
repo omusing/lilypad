@@ -94,16 +94,16 @@ When the user selects a catalog entry and saves a medication, the app writes one
 field alongside the standard `name`, `dose`, `route`, `frequency`:
 
 ```sql
--- V1 migration: add nullable catalog reference to medications table
 ALTER TABLE medications ADD COLUMN catalog_rxcui TEXT;
 ```
 
 `catalog_rxcui` is:
 - Populated when the user picks from autocomplete (`rxcui` of the selected entry).
 - NULL when the user enters a medication by free text (no catalog match).
-- Updated when the user explicitly re-selects a different catalog entry while editing
-  an existing medication. If the user edits the name, dose, or route fields without
-  making a new catalog selection, `catalog_rxcui` is left unchanged.
+- Re-linked to the new entry's rxcui when the user explicitly re-selects a catalog
+  entry while editing an existing medication. If the user edits the name, dose, or
+  route fields without making a new catalog selection, `catalog_rxcui` retains its
+  prior value.
 - Never used for display. The Medications tab renders `name`, `dose`, `route` from SQLite directly.
 - Reserved for future features: drug interaction warnings, catalog cross-referencing on export.
 

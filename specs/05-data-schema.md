@@ -206,9 +206,9 @@ All four tables are created in migration 1. Migration 2 adds `catalog_rxcui TEXT
 to `medications`. Subsequent migrations are additive only — no column drops or
 type changes.
 
-| Version | What changed |
+| Version | DDL |
 |---|---|
-| 1 | Create `entries`, `medications`, `medication_doses`, `app_settings` |
+| 1 | `CREATE TABLE entries`, `medications`, `medication_doses`, `app_settings` |
 | 2 | `ALTER TABLE medications ADD COLUMN catalog_rxcui TEXT` |
 
 ---
