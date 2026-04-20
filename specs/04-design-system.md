@@ -7,66 +7,116 @@ Tokens here are the canonical source of truth. All values flow into
 
 ## Color
 
+### Philosophy: two registers
+
+The app has two visual registers that must never bleed into each other:
+
+- **Ground** — backgrounds, cards, chrome, tab bar. Always muted. Reduces fatigue
+  for a user tracking something unpleasant day after day.
+- **Signal** — pain ramp, glyph colors, sparkline dots, history badges. Signal
+  carries chroma. When a user sees warm color, it means pain data. That categorical
+  clarity is the app's most important perceptual contract.
+
 ### Semantic split
 
 Two action colors carry distinct clinical meaning throughout the app:
 
 | Token | Hex | Meaning |
 |---|---|---|
-| `pain` | `#9E5252` | Pain-related actions and data (Log Pain button, pain badges, sparkline, pain score) |
-| `med` | `#2E7D5E` | Medication-related actions and data (Log Medication button, dose dots, med badges) |
+| `pain` | `#A84A42` | Pain-related actions and data |
+| `med` | `#2E7D5E` | Medication-related actions and data; also the brand color |
 
-**Why this split:** Red tones universally signal pain/discomfort; green signals safe/healing. These are categorically distinct — a user tapping quickly in pain should never confuse them. Both are desaturated enough to feel calm rather than alarming.
+**Why this split:** Red tones universally signal pain/discomfort; green signals
+safe/healing. Both are desaturated enough to feel calm rather than alarming, but
+pushed far enough to read instantly at a glance.
 
-The app brand color (teal/aqua from the icon) is a background/ambient color, not a primary action color. It appears in the page background and on the web preview shell — not on interactive elements.
+**Note on `pain`:** The original spec used `#9E5252` (dusty rose). This has been
+updated to `#A84A42` — a more clinical red that reads unambiguously at level 10 of
+the pain ramp. A doctor scanning History should read severity before they read any
+numbers. See `decisions/007-visual-language.md`.
+
+The app brand color (teal/aqua from the icon) is a background/ambient color only.
+It appears in the page background — not on interactive elements.
 
 ### Full palette
 
 ```ts
 // Backgrounds
-bg:              '#E2EEE7'   // Screen background — medium mint-green, gives widgets depth
-card:            '#F4FAF6'   // Widget/card surface — lighter than bg, creates elevation
+bg:              '#E4EFE8'   // Screen background — mint-sage, slightly warmer than original
+card:            '#F5FAF6'   // Widget/card surface — lighter than bg, creates elevation
+cardAlt:         '#EEF5F0'   // Secondary surfaces, unselected chip backgrounds
 
 // Text
 text:            '#1C2523'   // Primary text
 textSecondary:   '#6B7C73'   // Labels, timestamps, secondary copy
+textFaint:       '#9AA8A0'   // Placeholder text, empty state copy
 
 // Borders & separators
-border:          '#D0DFDA'
+border:          '#CFDED8'
+divider:         '#DDE8E2'   // Intra-card row separators
 
-// Action: pain (red family, muted brick rose)
-pain:            '#9E5252'
-painLight:       '#F5EDED'   // Tinted bg for pain-related rows/chips
+// Action: pain (clinical red family)
+pain:            '#A84A42'
+painDeep:        '#8F3830'   // Pressed state, active borders
+painLight:       '#F6EAE8'   // Wizard background, pain row tints
 
-// Action: medication (green family, forest green)
+// Action: medication (forest green)
 med:             '#2E7D5E'
-medLight:        '#E6F3ED'   // Tinted bg for med-related rows/chips
+medDeep:         '#1F5D46'   // Pressed state
+medLight:        '#E6F3ED'   // Wizard background, med row tints
+brand:           '#2E7D5E'   // Same as med
 
 // Accent
-mint:            '#8BCFAA'   // Sparkline dots, subtle accents
+mint:            '#8BCFAA'   // Sparkline fill, subtle accents
 
-// UI chrome (tab bar active state, focus rings — uses med green as brand)
-brand:           '#2E7D5E'   // Same as med; medication and brand are both green
+// Toast — neutral dark, never green (green would be misread as medication-related)
+toastBg:         '#2C3532'
+toastText:       '#F5FAF6'
 ```
 
 ### Pain scale gradient (0–10)
 
-Used on the pain selector row badges. Runs from neutral gray at 0 through warm
-yellows and ambers to the muted brick red at 10.
+Chroma lifted ~15% from the original spec. Level 10 ends in a true clinical red,
+not muted brick rose. Used on pain selector badges, history row badges, sparkline dots.
 
-| Level | Background | Text |
-|---|---|---|
-| 0 | `#E8E8E4` | `#6B7C73` |
-| 1 | `#EDE5C4` | `#7A6A30` |
-| 2 | `#EDD898` | `#7A5A18` |
-| 3 | `#E8C46C` | `#7A4A10` |
-| 4 | `#E0A83C` | `#ffffff` |
-| 5 | `#D08830` | `#ffffff` |
-| 6 | `#C07040` | `#ffffff` |
-| 7 | `#B85848` | `#ffffff` |
-| 8 | `#AE4E4E` | `#ffffff` |
-| 9 | `#A44848` | `#ffffff` |
-| 10 | `#9E5252` | `#ffffff` |
+| Level | Background | Text | Label |
+|---|---|---|---|
+| 0 | `#E9EBE6` | `#5F6E64` | No pain |
+| 1 | `#F2E8B8` | `#7A6A30` | Very mild |
+| 2 | `#F2D888` | `#6F5418` | Mild |
+| 3 | `#EFC252` | `#5F3A00` | Noticeable |
+| 4 | `#E5A020` | `#ffffff` | Moderate |
+| 5 | `#D77A18` | `#ffffff` | Affects tasks |
+| 6 | `#C85A22` | `#ffffff` | Severe |
+| 7 | `#BC4428` | `#ffffff` | Very severe |
+| 8 | `#B0372C` | `#ffffff` | Intense |
+| 9 | `#A02E2E` | `#ffffff` | Excruciating |
+| 10 | `#8F2A30` | `#ffffff` | Worst imaginable |
+
+### Mood scale (1–5)
+
+Red (bad) → green (good). Replaces the original cool-gray axis with a clinically
+intuitive mapping: any red badge = bad, any green badge = good, across all scales.
+
+| Level | Background | Text | Label |
+|---|---|---|---|
+| 1 | `#C84A3F` | `#ffffff` | Terrible |
+| 2 | `#E08A36` | `#ffffff` | Low |
+| 3 | `#E5BE3A` | `#3A3530` | OK |
+| 4 | `#7AB552` | `#ffffff` | Good |
+| 5 | `#3F8F4A` | `#ffffff` | Great |
+
+### Sleep quality scale (1–5)
+
+Same red→green axis as mood for visual consistency.
+
+| Level | Background | Text | Label |
+|---|---|---|---|
+| 1 | `#C84A3F` | `#ffffff` | Terrible |
+| 2 | `#E08A36` | `#ffffff` | Poor |
+| 3 | `#E5BE3A` | `#3A3530` | OK |
+| 4 | `#7AB552` | `#ffffff` | Good |
+| 5 | `#3F8F4A` | `#ffffff` | Rested |
 
 ---
 
@@ -74,24 +124,31 @@ yellows and ambers to the muted brick red at 10.
 
 ### Fonts
 
-| Role | Family | Fallback |
-|---|---|---|
-| Headers / greeting | Fraunces (variable, opsz 9–144) | Georgia, serif |
-| Body / UI | Instrument Sans | system-ui, sans-serif |
+Single-font system. See `decisions/007-visual-language.md` for rationale.
 
-Both loaded via `expo-font` at app startup. No system font substitution in production.
+| Role | Family | Source |
+|---|---|---|
+| All in-app UI | Source Sans 3 (variable, 400–700) | Google Fonts — free |
+| PDF report header + About display | Lora (500–600) | Google Fonts — free |
+
+**Fraunces and Instrument Sans are removed.** Source Sans 3 is a humanist sans
+designed for legibility at all sizes — critical for a 40–70+ audience who may be
+logging while in pain. Lora preserves editorial warmth on the two surfaces where
+it earns its place (the clinical document and the brand story).
+
+Both loaded via `expo-font` at app startup.
 
 ### Scale
 
 | Token | Size | Weight | Usage |
 |---|---|---|---|
-| `greeting` | 34px (`clamp(24px, 8vw, 34px)` on web) | 600 | "Hello, Sarah" home screen greeting |
-| `sectionHeading` | 26px | 600 (Fraunces) | Wizard step headings |
-| `bodyLarge` | 17px | 400 | Primary body copy, list labels |
-| `body` | 16px | 400 | Secondary body, activity rows |
-| `bodySmall` | 15px | 400 | Timestamps, subtitles |
-| `label` | 12px | 600 | ALLCAPS card section labels (letter-spacing 0.8px) |
-| `tabLabel` | 11px | 500/600 | Tab bar labels |
+| `greeting` | 30px | 600 | "Hello, Sarah" home screen greeting |
+| `sectionHeading` | 24px | 700 | Wizard step headings |
+| `bodyLarge` | 17px | 500 | Primary body copy, list labels |
+| `body` | 15px | 500 | Secondary body, activity rows |
+| `bodySmall` | 13px | 400–500 | Timestamps, subtitles |
+| `label` | 11px | 700 | ALLCAPS section labels (letter-spacing 1px) |
+| `tabLabel` | 11px | 500–600 | Tab bar labels |
 
 ---
 
@@ -111,8 +168,8 @@ Both loaded via `expo-font` at app startup. No system font substitution in produ
 
 ## Touch targets
 
-Minimum **48px** height on all interactive elements (exceeds iOS 44pt and
-Material 48dp minimums). Primary action buttons are **56px** tall.
+Minimum **48px** height on all interactive elements. Primary action buttons are
+**54–56px** tall. Stepper buttons (medication dose) are **34×34px** minimum.
 
 ---
 
@@ -123,14 +180,15 @@ Material 48dp minimums). Primary action buttons are **56px** tall.
 | `card` | 20px | All widget cards |
 | `button` | 28px | Primary action buttons (pill shape) |
 | `chip` | 12px | Selection chips (regions, triggers, qualities) |
-| `badge` | 10px | Pain level badges in list rows |
+| `badge` | 10px | Pain/mood/sleep badges in list rows |
 
 ---
 
 ## Shadows
 
 ```ts
-card:  '0 4px 16px rgba(26,122,78,0.13), 0 1px 4px rgba(26,122,78,0.08)'
+card:     '0 4px 16px rgba(26,122,78,0.10), 0 1px 4px rgba(26,122,78,0.06)'
+cardSoft: '0 2px 8px rgba(26,122,78,0.06)'
 // Green-tinted shadow — cards feel like they belong on the green background
 ```
 
@@ -142,65 +200,121 @@ card:  '0 4px 16px rgba(26,122,78,0.13), 0 1px 4px rgba(26,122,78,0.08)'
 
 - Equal width, side by side, 50/50 grid
 - Height: 100px, border-radius: 28px (pill)
-- Log Pain: `pain` background, white label + icon
-- Log Medication: `med` background, white label + icon
+- Log Pain: `pain` background, white label + waveform icon
+- Log Medication: `med` background, white label + capsule icon
 - Icon above label, centered
+
+### Badge (universal — pain / mood / sleep)
+
+One shell, three payloads. A user who learns the pain badge has learned mood and sleep.
+
+- **Size:** 34×34px in list/history rows; 50×50px in wizard selection rows
+- **Shape:** 10px border-radius rounded square
+- **Pain badge:** numeral centered, color from pain ramp above
+- **Mood badge:** smiley-face glyph (see Glyph system below), color from mood ramp
+- **Sleep badge:** sleepy-face glyph (see Glyph system below), color from sleep ramp
+- **Selected state:** 3px ring in category ring color (`painRing` or `medRing`)
+
+### Glyph system (mood + sleep)
+
+Unicode emoji are replaced by a custom glyph family. See `decisions/007-visual-language.md`.
+
+**Mood glyphs (1–5):** Full smiley face — circle outline, dot eyes, expressive brows
+(angled down for 1–2, neutral for 3, lifted for 4–5), mouth curve (deep frown → flat
+→ broad smile). Rendered at 28px inside the 50×50 wizard badge; 22px inside the 34×34
+history badge.
+
+**Sleep glyphs (1–5):** Same face family. Closed eyes for levels 3–5 (drowsy/rested),
+open distressed eyes for 1–2. Small "z" in the top-right corner distinguishes sleep
+from mood at a glance.
+
+Both glyph colors use their badge's `fg` value (white on dark, dark on mid-tone).
 
 ### Pain selector (wizard step 1)
 
 - Vertical list, 11 rows (0–10)
 - Row height: 48px (full-width tap target)
-- Left: colored badge (34×34px, radius 10px) with number — gradient per table above
-- Right: description label (16px)
-- Selected: row background tinted, label bold, checkmark visible on right
-- Next button disabled until a selection is made
+- Left: colored badge (34×34px, radius 10px) with numeral — per ramp above
+- Right: description label (bodyLarge)
+- Selected: row background tinted `painLight`, label bold, checkmark right
+- Next disabled until a selection is made
+- Do not show "0 = no pain / 10 = worst imaginable" header text — each row already labels 0 and 10
 
-### Emoji scale (mood + sleep quality, wizard step 4)
+### Body map (wizard step 2)
 
-- 5 options in a horizontal row
-- Style: simplified, monochromatic or minimal-color graphic smileys — not standard
-  Unicode emoji. Goal: calm, designed-for-this-app feel, not "emoji keyboard". Exact
-  style TBD pending design pass against the uploaded reference image.
-- Numbered 1–5 below each option
-- Same row-selection pattern as pain selector but horizontal
+Location selection uses an anatomical front/back silhouette instead of chip-only input.
+
+- Two silhouettes side by side: Front / Back
+- Abstract but anatomically proportioned SVG — head, neck, shoulders, arms, hands,
+  torso, hips, legs, feet
+- Zone hit targets: invisible circles/ellipses positioned over correct anatomy;
+  become visible (pain color, ~55% opacity) on tap
+- Selected zone names echoed as chips below the map for accessibility and confirmation
+- Chips are alphabetical
+- Side-by-side is the default layout; a stacked single-view with Front/Back toggle
+  should be validated in prototype testing (especially iPhone SE)
+
+**Front zones (11):** Head, Neck, Shoulders, Left/Right Arm, Left/Right Hand,
+Chest, Abdomen, Hips, Left/Right Leg, Left/Right Foot
+
+**Back zones (11):** Head, Neck, Shoulders, Left/Right Arm, Left/Right Hand,
+Upper Back, Lower Back, Hips, Left/Right Leg, Left/Right Foot
 
 ### Widget cards (Home screen)
 
-- Background: `card` (`#F4FAF6`)
-- Shadow: card shadow above
+- Background: `card`
+- Shadow: card shadow
 - Border-radius: 20px
-- Section label: 12px, 600 weight, uppercase, `textSecondary` color, letter-spacing 0.8px
+- Section label: 11px, 700 weight, uppercase, `textSecondary`, letter-spacing 1px
 - Content padding: 16px
 
 ### Wizard visual identity
 
-The two logging flows must be visually distinct so the user always knows which wizard
-they are in. Applied consistently to: wizard header background or accent, progress bar
-fill, and primary action button.
+Each wizard is chromatically distinct so the user always knows which flow they are in.
+Applied to the **entire wizard background** (not just the header), progress bar fill,
+and primary action button.
 
-| Flow | Color | Token |
-|---|---|---|
-| Pain wizard | Muted brick rose | `Colors.pain` (`#9E5252`) |
-| Medication wizard | Forest green | `Colors.med` (`#2E7D5E`) |
+| Flow | Background | Progress | Button |
+|---|---|---|---|
+| Pain wizard | `painLight` (#F6EAE8) | `pain` fill | `pain` bg |
+| Medication wizard | `medLight` (#E6F3ED) | `med` fill | `med` bg |
+
+**Note:** Painting only the header in `painLight` while leaving the body in `bg`
+(green) creates a harsh collision at the boundary. Full-background identity resolves
+this and reinforces the categorical split.
 
 ### Filled pill (tappable value display)
 
-Used for settings values that are both readable and tappable (e.g. reminder time).
-Replaces plain text + separate picker trigger.
+Used for settings values that are readable and tappable (e.g. reminder time).
 
-- Background: `Colors.med`
-- Text: `#ffffff`, `FontFamily.sans`, `FontSize.bodySmall`, weight 600
-- Border-radius: `Radius.button` (28px, full pill)
+- Background: `med`
+- Text: `#ffffff`, Source Sans 3, `bodySmall`, weight 600
+- Border-radius: 28px (full pill)
 - Padding: 6px vertical, 14px horizontal
-- Disabled state (when toggle is off): background `Colors.border`, text `Colors.textSecondary`
-- Tap opens the relevant picker inline
+- Disabled (toggle off): background `border`, text `textSecondary`
+- Tap opens relevant picker inline
+
+### Stepper (medication dose count)
+
+- Two 34×34px circle buttons (− / +), count label between
+- − button: `border` bg when count = 0; `med` bg when count > 0
+- + button: always `med` bg
+- All text and symbols vertically centered with flexbox
+
+### Toast
+
+- Background: `toastBg` (#2C3532), text: `toastText` (#F5FAF6)
+- Pill shape, 28px border-radius, leading checkmark icon
+- Positioned above tab bar — never overlaps any button
+- Never green — `med` green is a categorical action color; a green toast would be
+  misread as medication-related
 
 ### UI copy rules
 
-- No inline hint text under fields unless the content is genuinely non-obvious.
-  Self-evident fields (name, date, toggle labels) need no explanation.
-- No "optional" labels on wizard step headings. Next button state communicates
-  what is required; silence communicates everything else is optional.
+- All button labels use **Title Case**: "Save Pain Log", "Next", "Log Doses", "Add Medication"
+- No ampersand — use "and" in full: "Save and Log Medication"
+- No inline hint text under self-evident fields (name, date, toggle labels)
+- No "optional" labels on wizard step headings — Next button state communicates requirements
 
 ### Tab bar
 
@@ -208,21 +322,30 @@ Replaces plain text + separate picker trigger.
 - Border-top: 1px `border`
 - Active icon + label: `brand` (`#2E7D5E`)
 - Inactive: `textSecondary`
-- 5 tabs: Home, History, Log (center — "+" icon, no label), Medications, Report
-- Center "Log" tab is larger / visually distinct — it is the primary action entry point
+- **4 tabs: Home, Timeline, Medications, Report**
+- No floating "+" center tab — the two primary CTAs on Home are the logging entry points
+
+**Tab icons (24px, 1.75px stroke, rounded joins):**
+
+| Tab | Icon |
+|---|---|
+| Home | House outline |
+| Timeline | Clock with tick |
+| Medications | Pharmacy cross (circle + plus) |
+| Report | Bar chart |
 
 ---
 
 ## Dark mode
 
-V1 is light mode only. Dark mode deferred. Do not add dark mode variants to
-`constants/theme.ts` in V1 — it adds maintenance surface with no current user value.
+V1 is light mode only. Deferred. Do not add dark mode variants to `constants/theme.ts`.
 
 ---
 
 ## Motion
 
-Minimal. No celebration animations. Interaction feedback only:
+Minimal. Interaction feedback only.
+
 - Button press: `scale(0.97)` + slight brightness reduction, 80ms ease
-- List row select: badge scale(1.12), 120ms ease
+- Badge/row select: badge `scale(1.12)`, 120ms ease
 - No spring physics, no particle effects, no confetti

@@ -27,17 +27,16 @@ as rarely as their experience warrants. See
 Note: medication is no longer a field in the pain log. See "Log Medication" below
 for how the two flows connect.
 
-**Input method:** 5-step wizard. One topic per screen, progress indicator, guided
+**Input method:** 4-step wizard. One topic per screen, progress indicator, guided
 flow. Suitable for first-time users and users who find forms overwhelming.
 
 Steps:
 1. Pain score (required — Next disabled until selected)
-2. Body regions (required — Next disabled until at least one selected)
+2. Body regions via body map (required — Next disabled until at least one selected)
 3. Pain quality + triggers (optional — Next always enabled)
-4. Mood + sleep (optional)
-5. Medications shortcut + note (optional) — final screen. Submit action: **"Save
-   Pain Log"**. The medications section is a convenience shortcut; the canonical
-   dose record is the dedicated Log Medication flow.
+4. Mood + sleep + provider note (optional) — two exit actions:
+   **"Save Pain Log"** and **"Save and Log Medication"**. The second saves the pain
+   entry and immediately opens the Log Medication wizard.
 
 The minimum case (pain score + location only) must be completable in under 60 seconds.
 
@@ -47,20 +46,22 @@ The minimum case (pain score + location only) must be completable in under 60 se
 - Do not show the helper text "0 = no pain / 10 = worst imaginable" above the pain
   score list. Each row already labels 0 and 10 explicitly.
 - Chips (regions, qualities, triggers) are listed in alphabetical order.
-- The wizard header, progress bar, and primary action button use the pain color
-  family (`Colors.pain`, `#9E5252`) so the user always knows they are in the pain flow.
+- The entire wizard background, progress bar, and primary action button use the pain
+  color family (`Colors.pain`, `#A84A42` / `Colors.painLight`, `#F6EAE8`) so the
+  user always knows they are in the pain flow.
+- All button labels use Title Case. No ampersand — use "and" in full.
 
 **Previous selections:** On opening the pain wizard, load the most recent entry and
 soft-pre-select its regions, qualities, and triggers. The user can deselect any of
-them. This reduces re-entry friction for chronic pain patterns. Pain score is never
-pre-selected — it must always be a conscious choice.
+them. Pain score is never pre-selected — it must always be a conscious choice.
 
 ---
 
 ### Log Medication
 
-A dedicated flow, visually distinct from the pain wizard. Header, progress bar, and
-primary action button use the medication color family (`Colors.med`, `#2E7D5E`).
+A dedicated flow, visually distinct from the pain wizard. The entire wizard background,
+progress bar, and primary action button use the medication color family
+(`Colors.med`, `#2E7D5E` / `Colors.medLight`, `#E6F3ED`).
 
 **Multi-medication, multi-dose session:**
 - User selects one or more medications from their active list in a single session.
@@ -68,11 +69,11 @@ primary action button use the medication color family (`Colors.med`, `#2E7D5E`).
   increment inserts one additional `medication_doses` row with the same `taken_at`
   timestamp.
 - Optional note per session (shared across all logged doses).
-- Single "Log doses" action saves all selected medications and counts at once.
+- Single "Log Doses" action saves all selected medications and counts at once.
 
 Accessible via:
-- Tab bar center "+" → Log Medication
-- "Save and log medication" exit from the pain wizard
+- Home screen "Log Medication" button
+- "Save and Log Medication" exit from the pain wizard (step 4)
 
 ---
 
@@ -86,31 +87,46 @@ Accessible via:
 
 ---
 
-### History / Records
+### Timeline
 
-Scrollable list of pain entries, grouped by date (date header rows), newest first.
-Each row: time, pain level badge (color-coded), top 2–3 regions, mood emoji (if logged).
-Tap row → Entry Detail.
+Unified scrollable view showing pain entries and medication dose events together,
+newest first. This is the primary surface for reviewing history. See
+`decisions/008-unified-timeline.md` for rationale.
 
-Medication dose history is accessible through the Medications tab (per-medication
-dose log in Medication Detail), not surfaced in the History list.
+**Layout:**
+- Date divider rule: `─────── APRIL 17 ───────` — full-width horizontal rule with
+  date centered in uppercase, letter-spacing 1.2px
+- Two columns below each divider: pain cards on the left, medication cards on the right
+- Vertical rule at 50% between columns (1px, `divider` color)
+- Days with only pain events, or only medication events, leave the opposite column empty
 
-**Adding from History:**
-Users can add a new pain entry directly from the History screen. Useful for catch-up
-logging or back-dated entries.
+**Pain cards (left column):**
+- Right border in the pain ramp color for that entry's score
+- Pain level badge (34×34, ramp color) + time
+- Top regions label
+- Optional note excerpt
+
+**Medication cards (right column):**
+- Left border in `med` green
+- Medication name, dose, time
+- Dose count (×2 etc.) if more than one
+
+**Adding from Timeline:**
+Users can add a new pain entry directly from the Timeline screen for catch-up logging
+or back-dated entries.
 
 **Editing:**
-Entry Detail is editable in V1. All fields are editable. Edited entries retain their
-original `created_at` timestamp; `updated_at` is set on save.
+Tap any pain card → Entry Detail (all fields editable).
+Tap any medication card → read-only dose detail (V1).
 
 **Deleting:**
-Per-entry delete from Entry Detail. Confirmation required. Cannot be undone.
+From Entry Detail only. Confirmation required. Cannot be undone.
 
 ---
 
 ### Entry Detail (Add / Edit)
 
-Used for both viewing existing entries and creating new ones from the History screen.
+Used for both viewing existing entries and creating new ones from the Timeline.
 All fields are editable.
 
 **Date field (always shown, always editable):**
@@ -130,15 +146,22 @@ All fields are editable.
 
 ### Medications
 
+Management screen only. Adding, editing, and archiving medications. Dose intake
+is handled exclusively through the Log Medication wizard — not from this screen.
+
 **Medication list:**
-- Add, edit, archive medications (name, dose, route, frequency)
-- Today's dose count and last dose time shown on each row
+- Each row: medication name, dose, route, frequency
+- Today's dose count and last dose time shown per row
+- Edit icon button → inline edit of name/dose/route/frequency
+- Archive icon button → confirmation dialog → sets `is_active = 0`
 - Archived medications hidden by default, preserved with full dose history
 
 **Adding a new medication:**
-The "add" action in the Medications tab is a clearly labelled button — not a "+"
-icon. The tab bar center "+" is reserved for logging. The add medication button
-uses a distinct label (e.g. "Add medication") to avoid collision.
+"Add Medication" button (labelled, not a "+" icon) in the screen header. Opens the
+Add Medication sheet.
+
+**No "Took it now" button on this screen.** The Medications screen is for list
+management only. Intake is logged via Log Medication (Home CTA or pain wizard exit).
 
 **Medication management:**
 - No delete — archive only, to preserve historical dose data
@@ -159,28 +182,27 @@ uses a distinct label (e.g. "Add medication") to avoid collision.
 - All patient notes (free text, timestamped)
 
 **PDF export:**
-- Branded — ThePainNP name/logo in header (logo asset and exact copy TBD,
-  not blocking demo build; use placeholder text for demo)
-- A4 format, clinical-grade layout
+- Branded — ThePainNP name/logo in header (placeholder for demo)
+- A4 format, clinical-grade layout. PDF header uses Lora for display text.
 - Chart rendered as inline SVG (computed from data, not a screen capture)
 - Opened via share sheet; user controls destination
-- SVG render fallback: if chart fails on Android WebView, include tabular data
-  only with a note "Chart unavailable on this device"
+- SVG render fallback: tabular data if chart fails on Android WebView
+
+**Export button label:** "Export PDF Report"
 
 ---
 
 ### About + Contact
 
 **Privacy copy tone:** Warm and reassuring, not defensive or technical. Plain language,
-no jargon (no "SQLite", "transmitted", "synced"). Positive framing: what the app does
-for the user, not a list of what it does not do. Direction: "Your notes are yours. They
-live on your phone and go nowhere." Exact copy TBD.
+no jargon. Positive framing: "Your notes are yours. They live on your phone and go
+nowhere." Exact copy TBD.
 
 **Content:**
 - What Lilypad is and who made it
 - Brief description of ThePainNP (name, credentials, practice focus)
-- Privacy commitment (plain language, see tone guidance above)
-- Social media links to ThePainNP platforms — opens in browser / platform app
+- Privacy commitment (plain language)
+- Social media links — opens in browser / platform app
 - Legal notice: not a medical device, not medical advice
 - App version number
 
@@ -198,13 +220,12 @@ live on your phone and go nowhere." Exact copy TBD.
 - App version
 
 **Reminder time picker UI:**
-The current time is shown as a tappable pill (white text, `Colors.med` background,
-rounded). Tapping the pill opens the time picker. When the toggle is off, the pill
-is shown in a muted/disabled state. The always-visible green text label and the
-floating disconnected picker are removed.
+Time shown as a tappable filled pill (white text, `Colors.med` background, 28px
+border-radius). Disabled state: `Colors.border` bg, `Colors.textSecondary` text.
+Tapping opens the time picker inline.
 
-**Inline hints:** Only shown when the content is genuinely non-obvious. Do not explain
-fields that are self-evident (e.g. what a name field is for).
+**Inline hints:** Only when content is genuinely non-obvious. Self-evident fields
+carry no sub-label.
 
 **Developer tools** (visible in development builds only):
 - Reset all data — flush DB, return to onboarding
@@ -245,14 +266,12 @@ Both directions required in V1. Export without import is not a migration path.
 ## Deferred (V1.1)
 
 - **Catch-up flow:** Surface a prompt when a user reopens the app after missing
-  N days: "You haven't logged in 3 days — want to add a quick entry for how
-  you've been feeling?" Lightweight single-screen entry, not the full wizard.
-- **Medication schedule + missed-dose reminders:** User defines an expected
-  dosing schedule per medication. App detects missed doses and offers a retroactive
-  prompt. Requires medication schedule concept not present in V1.
+  N days. Lightweight single-screen entry, not the full wizard.
+- **Medication schedule + missed-dose reminders:** User defines an expected dosing
+  schedule per medication. App detects missed doses and offers a retroactive prompt.
 - Custom date range for reports
 - Trigger correlation insights ("pain tends to be higher after poor sleep")
-- Per-medication dose history view
+- Per-medication dose history view (dose log scrollable from Medication Detail)
 
 ## Deferred (V2+)
 

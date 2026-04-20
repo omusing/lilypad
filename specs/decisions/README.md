@@ -56,3 +56,6 @@ What to watch for in V1.1+ that might prompt revisiting.
 | [004](004-medication-catalog-storage.md) | Medication catalog storage: TypeScript bundle vs. SQLite asset | Decided |
 | [005](005-medication-catalog-build-order.md) | Medication catalog build order: hand-author first vs. pipeline first | Decided |
 | [006](006-versioning-policy.md) | Versioning policy: migrations, testing, and release process | Active |
+| [007](007-visual-language.md) | Visual language: typography, glyph system, and color philosophy | Decided |
+| [008](008-unified-timeline.md) | Unified timeline: promoting the combined pain + medication view to V1 | Active |
+

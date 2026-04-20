@@ -13,19 +13,15 @@ be validated through physical prototype testing before finalizing.
 
 ```
 Tab bar (always visible):
-  Home | History | Log | Medications | Report
-
-  "Log" (center tab) → bottom sheet with two options:
-    Log Pain       ← launches pain check-in wizard
-    Log Medication ← quick-log: pick medication + "Took it now"
+  Home | Timeline | Medications | Report
 
 Modal stack (over tab bar):
-  Pain Check-In Wizard   ← launched from Home "Log Pain" or Log tab
-  Log Medication sheet   ← launched from Home "Log Medication", Log tab, or Medications "+"
-  Add Medication sheet   ← launched from Onboarding / Medications / Wizard step 5
+  Pain Check-In Wizard   ← launched from Home "Log Pain" button
+  Log Medication sheet   ← launched from Home "Log Medication" button or pain wizard exit
+  Add Medication sheet   ← launched from Onboarding / Medications "+"
 
 Full-screen stack (pushed from tab):
-  Entry Detail           ← from History row or "+" in History
+  Entry Detail           ← from Timeline pain card
   Medication Detail      ← from Medications card
   Settings               ← from gear icon in Home header
   About + Contact        ← from Settings
@@ -369,34 +365,50 @@ Illness / infection, Unknown
 
 ---
 
-## History
+## Timeline
 
-**Header:** "History" title, "+" button (top right) → Entry Detail in add mode.
+Unified scrollable view of pain entries and medication dose events, newest first.
+This is the primary surface for reviewing history. See
+[decisions/008-unified-timeline.md](decisions/008-unified-timeline.md) for rationale.
 
-**Layout:** Scrollable list, newest first. Grouped by date (date header rows).
+**Header:** "Timeline" title. No "+" button — logging is initiated from Home.
 
-**Each row:**
-- Time (within a date group, e.g., "9:14 AM")
-- Pain level badge: colored pill showing the score (color scale: green 0–3, yellow 4–6,
-  red 7–10 — ⚠️ confirm color mapping with ThePainNP clinical judgment)
-- Top 2–3 pain regions (truncated with "..." if more)
-- Mood emoji (if logged)
+**Date dividers:** Full-width horizontal rule with date centered in uppercase,
+letter-spacing 1.2px. Format: `─────── APRIL 17 ───────`
 
-**Tap row:** → Entry Detail (edit mode, all fields editable).
+**Two-column layout** below each divider:
+- Left column: pain cards
+- Right column: medication cards
+- Vertical rule at 50% between columns (`divider` color, subtle)
+- Days with only one type of event: opposite column is empty — no placeholder
+
+**Pain card:**
+- Right border in the pain ramp color for that entry's score
+- Pain level badge, time (e.g. "9:14 AM"), top 2–3 regions (truncated with "..." if more)
+- Mood glyph (if logged)
+- Note excerpt (first line, if logged)
+- Tap → Entry Detail (edit mode)
+
+**Medication card:**
+- Left border in `med` green
+- Medication name, dose strength, time, count (e.g. "×2")
+- Tap → Medication Detail
 
 **Delete:**
-- Swipe left on row → "Delete" action (red)
+- Swipe left on either card type → "Delete" action (red)
 - Confirmation dialog: "Delete this entry? This cannot be undone."
-- On confirm: delete from DB, remove row with animation.
+- On confirm: delete from DB, remove card with animation.
 
-**Empty state:** "No entries yet. Tap the button above to add one, or use the
-Check-In tab to start your first check-in."
+**Empty state:** "No entries yet. Use the Log Pain or Log Medication buttons on the
+Home screen to get started."
 
 **Edge cases:**
-- Multiple entries on the same date: all appear under the same date header, ordered
-  chronologically by `created_at`.
-- Entry back-dated to a past date: appears under the correct past date header,
+- Multiple events on the same date: all appear under the same date divider, ordered
+  chronologically within their column.
+- Entry back-dated to a past date: appears under the correct past date divider,
   ordered by `created_at` within that day.
+- Medication dose logged at the same time as a pain entry: each appears in its
+  respective column under the same date divider — no merging.
 
 ---
 
@@ -433,7 +445,7 @@ Used for both viewing/editing existing entries and creating new entries from His
 **Delete (edit mode only):**
 - "Delete Entry" button at bottom (red / destructive style)
 - Confirmation dialog: "Delete this entry? This cannot be undone."
-- On confirm: delete from DB, pop back to History.
+- On confirm: delete from DB, pop back to Timeline.
 
 **Validation:** "Save" disabled until pain_level is set and at least one pain region
 is selected.
