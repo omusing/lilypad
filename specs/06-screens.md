@@ -350,18 +350,25 @@ Illness / infection, Unknown
 - Multi-line text input, placeholder: "Anything your provider should know..."
 - No character limit in V1.
 
-**Submit button:** "Save Pain Log" (replaces "Next" on step 5).
+**Two exit actions on step 4:**
+- **"Save Pain Log"** — primary action
+- **"Save and Log Medication"** — secondary action, same row or below the primary button
 
-**On submit:**
-- Validate: pain_level is set (guaranteed by step 1 gate), pain_regions has ≥1 item.
-- Write entry to DB: `entry_date` = today (YYYY-MM-DD), `created_at` = precise
-  system timestamp, `updated_at` = NULL. Include `note` if provided in step 5.
-- For each medication checked in step 5: insert one `medication_doses` row
-  (`medication_id`, `taken_at` = same precise system timestamp as `created_at`,
-  `note` = NULL). These are shortcut dose records — identical to tapping "Took it now".
+**On "Save Pain Log":**
+- Write entry to DB: `entry_date` = today (YYYY-MM-DD), `created_at` = precise system
+  timestamp, `updated_at` = NULL. Include `note` if provided.
 - Dismiss wizard.
-- Show brief success toast: "Pain log saved."
-- Update Home activity summary ("Last logged: just now").
+- Show success toast: "Pain log saved."
+- On DB write failure: show error toast "Couldn't save — please try again." Wizard stays
+  open with all data intact. No partial save.
+
+**On "Save and Log Medication":**
+- Write the same entry to DB (identical to "Save Pain Log").
+- On DB write failure: show error toast "Couldn't save — please try again." Do NOT
+  open the medication wizard. Wizard stays open with all data intact.
+- On success: dismiss pain wizard, immediately open the Log Medication sheet.
+- The Log Medication sheet opens fresh (no pre-selection). User selects medications
+  and logs doses independently.
 
 ---
 
