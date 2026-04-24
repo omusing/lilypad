@@ -261,6 +261,8 @@ export default function LogPainScreen() {
   const [data, setData]                     = useState<WizardData>(EMPTY);
   const [submitting, setSubmitting]         = useState(false);
   const [toastVisible, setToastVisible]     = useState(false);
+  // Tracks whether the user has made any explicit input — pre-loaded defaults don't count.
+  const [userTouched, setUserTouched]       = useState(false);
 
   useEffect(() => {
     getLatestEntry().then(entry => {
@@ -275,11 +277,12 @@ export default function LogPainScreen() {
   }, []);
 
   function patch<K extends keyof WizardData>(key: K, val: WizardData[K]) {
+    setUserTouched(true);
     setData(d => ({ ...d, [key]: val }));
   }
 
   function handleCancel() {
-    if (isDirty(data)) {
+    if (userTouched && isDirty(data)) {
       Alert.alert('Discard this pain log?', '', [
         { text: 'Keep Editing', style: 'cancel' },
         { text: 'Discard', style: 'destructive', onPress: () => router.back() },
