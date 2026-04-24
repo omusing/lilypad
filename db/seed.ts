@@ -99,7 +99,7 @@ export async function seedJerry(): Promise<void> {
   await setName('Jerry');
 
   const pains   = [1,2,1,0,2,1,3,1,2,0,1,2,1,3,1,0,2,1,2,1,3,1,0,2,1,2,0,1,2,1];
-  const regions = ['legs','knees'];
+  const regions = ['legs', 'feet'];
   const hours   = [8,7,8,9,7,8,8,9,7,8,9,7,8,8,7,9,8,7,8,9,7,8,9,8,7,8,9,7,8,8];
   const mins    = [0,30,15,0,45,20,5,35,10,50,25,0,40,15,55,30,0,45,20,5,35,10,50,25,0,40,15,55,30,0];
 

@@ -2,19 +2,17 @@ import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, TextInput,
   StyleSheet, Alert, Animated, KeyboardAvoidingView, Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, FontFamily, FontSize, Spacing, Radius, TouchTarget, PainScale } from '@/constants/theme';
-import { REGIONS } from '@/constants/regions';
+import { Colors, FontFamily, FontSize, Spacing, Radius, TouchTarget, PainScale, MoodScale, SleepScale } from '@/constants/theme';
 import { QUALITIES } from '@/constants/qualities';
 import { TRIGGERS } from '@/constants/triggers';
-import { getMedications } from '@/db/medications';
 import { insertEntry, getLatestEntry } from '@/db/entries';
-import { logDoseNow } from '@/db/doses';
-import type { Medication } from '@/db/schema';
+import BodyMap from '@/components/BodyMap';
 
 // ─── Wizard state ─────────────────────────────────────────────────────────────
 
@@ -25,14 +23,12 @@ interface WizardData {
   triggers:       string[];
   mood:           number | null;
   sleep_quality:  number | null;
-  medication_ids: number[];
   note:           string;
 }
 
 const EMPTY: WizardData = {
   pain_level: null, pain_regions: [], pain_qualities: [],
-  triggers: [], mood: null, sleep_quality: null,
-  medication_ids: [], note: '',
+  triggers: [], mood: null, sleep_quality: null, note: '',
 };
 
 function isDirty(d: WizardData): boolean {
@@ -54,32 +50,17 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
 
 const prog = StyleSheet.create({
   row:   { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: Spacing.lg },
-  track: { flex: 1, height: 4, backgroundColor: Colors.border, borderRadius: 2, overflow: 'hidden' },
-  fill:  { height: '100%', backgroundColor: Colors.brand, borderRadius: 2 },
+  track: { flex: 1, height: 4, backgroundColor: Colors.painDeep, borderRadius: 2, overflow: 'hidden', opacity: 0.3 },
+  fill:  { height: '100%', backgroundColor: Colors.pain, borderRadius: 2 },
   label: { fontFamily: FontFamily.sans, fontSize: FontSize.label, color: Colors.textSecondary, width: 36, textAlign: 'right' },
 });
 
 // ─── Step 1 — Pain score ──────────────────────────────────────────────────────
 
-const PAIN_LABELS = [
-  'No pain',
-  'Very mild, barely noticeable',
-  'Mild, can be ignored',
-  'Noticeable, distracting',
-  'Moderate, hard to ignore',
-  'Moderate, affects daily tasks',
-  'Severe, limits concentration',
-  'Very severe, limits activity',
-  'Intense, barely functional',
-  'Excruciating',
-  'Worst imaginable',
-];
-
 function StepPainScore({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
   return (
     <>
       <Text style={s.heading}>How is your pain right now?</Text>
-      <Text style={s.sub}>0 = no pain · 10 = worst imaginable</Text>
       <View style={s.painList}>
         {Array.from({ length: 11 }, (_, i) => {
           const selected = value === i;
@@ -95,7 +76,7 @@ function StepPainScore({ value, onChange }: { value: number | null; onChange: (v
                 <Text style={[s.painBadgeNum, { color: scale.text }]}>{i}</Text>
               </View>
               <Text style={[s.painRowLabel, selected && s.painRowLabelSelected]}>
-                {PAIN_LABELS[i]}
+                {scale.label}
               </Text>
               {selected && <Ionicons name="checkmark" size={18} color={Colors.pain} />}
             </TouchableOpacity>
@@ -106,36 +87,20 @@ function StepPainScore({ value, onChange }: { value: number | null; onChange: (v
   );
 }
 
-// ─── Step 2 — Regions ────────────────────────────────────────────────────────
+// ─── Step 2 — Body map ────────────────────────────────────────────────────────
 
 function StepRegions({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  function toggle(key: string) {
-    onChange(value.includes(key) ? value.filter(k => k !== key) : [...value, key]);
-  }
+  const { width } = useWindowDimensions();
+  const mapWidth = width - Spacing.lg * 2;
   return (
     <>
       <Text style={s.heading}>Where is your pain?</Text>
-      <Text style={s.sub}>Select all that apply (at least one required)</Text>
-      <View style={s.chipGrid}>
-        {REGIONS.map(r => {
-          const on = value.includes(r.key);
-          return (
-            <TouchableOpacity
-              key={r.key}
-              style={[s.chip, on && s.chipOn]}
-              onPress={() => toggle(r.key)}
-              activeOpacity={0.75}
-            >
-              <Text style={[s.chipLabel, on && s.chipLabelOn]}>{r.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <BodyMap selected={value} onChange={onChange} displayWidth={mapWidth} />
     </>
   );
 }
 
-// ─── Step 3 — Qualities + Triggers ───────────────────────────────────────────
+// ─── Step 3 — Quality + Triggers ─────────────────────────────────────────────
 
 function ChipGroup({
   title, items, value, onChange,
@@ -180,127 +145,73 @@ function StepQualitiesTriggers({
   return (
     <>
       <Text style={s.heading}>Describe your pain</Text>
-      <Text style={s.sub}>Both sections are optional</Text>
       <ChipGroup title="Pain qualities" items={QUALITIES} value={qualities} onChange={onQualitiesChange} />
       <ChipGroup title="Triggers" items={TRIGGERS} value={triggers} onChange={onTriggersChange} />
     </>
   );
 }
 
-// ─── Step 4 — Mood + Sleep ────────────────────────────────────────────────────
+// ─── Step 4 — Mood, sleep, note + exit actions ───────────────────────────────
 
-const MOOD_EMOJI  = ['😞','😕','😐','🙂','😊'];
-const MOOD_LABEL  = ['Terrible','Not great','Okay','Pretty good','Great'];
-const SLEEP_EMOJI = ['😩','😟','😐','😌','😊'];
-const SLEEP_LABEL = ['Very poor','Poor','Fair','Good','Great'];
-
-function EmojiScale({
-  title, emojis, labels, value, onChange,
+function BadgeScale({
+  title,
+  scale,
+  value,
+  onChange,
 }: {
-  title: string; emojis: string[]; labels: string[];
-  value: number | null; onChange: (v: number) => void;
+  title: string;
+  scale: readonly ({ bg: string; text: string; label: string } | null)[];
+  value: number | null;
+  onChange: (v: number) => void;
 }) {
   return (
     <View style={{ marginBottom: Spacing.xl }}>
       <Text style={s.sectionTitle}>{title}</Text>
-      <View style={s.emojiRow}>
-        {emojis.map((emoji, i) => {
-          const v = i + 1;
+      <View style={s.badgeRow}>
+        {[1, 2, 3, 4, 5].map(v => {
+          const entry = scale[v];
+          if (!entry) return null;
           const on = value === v;
           return (
             <TouchableOpacity
               key={v}
-              style={[s.emojiBtn, on && s.emojiBtnOn]}
+              style={[s.badgeBtn, on && { borderColor: Colors.med, borderWidth: 3 }]}
               onPress={() => onChange(v)}
               activeOpacity={0.75}
+              accessibilityLabel={entry.label}
             >
-              <Text style={s.emojiChar}>{emoji}</Text>
-              <Text style={[s.emojiNum, on && s.emojiNumOn]}>{v}</Text>
+              <View style={[s.badge, { backgroundColor: entry.bg }]}>
+                <Text style={[s.badgeNum, { color: entry.text }]}>{v}</Text>
+              </View>
+              <Text style={s.badgeLabel}>{entry.label}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
-      {value !== null && (
-        <Text style={s.emojiSelectedLabel}>{labels[value - 1]}</Text>
-      )}
     </View>
   );
 }
 
 function StepMoodSleep({
-  mood, sleep, onMoodChange, onSleepChange,
+  mood, sleep, note,
+  onMoodChange, onSleepChange, onNoteChange,
 }: {
-  mood: number | null; sleep: number | null;
-  onMoodChange: (v: number) => void; onSleepChange: (v: number) => void;
+  mood: number | null; sleep: number | null; note: string;
+  onMoodChange: (v: number) => void;
+  onSleepChange: (v: number) => void;
+  onNoteChange: (v: string) => void;
 }) {
   return (
     <>
       <Text style={s.heading}>How are you feeling overall?</Text>
-      <Text style={s.sub}>Both are optional</Text>
-      <EmojiScale title="Mood" emojis={MOOD_EMOJI} labels={MOOD_LABEL} value={mood} onChange={onMoodChange} />
-      <EmojiScale title="Sleep quality" emojis={SLEEP_EMOJI} labels={SLEEP_LABEL} value={sleep} onChange={onSleepChange} />
-    </>
-  );
-}
+      <BadgeScale title="Mood" scale={MoodScale} value={mood} onChange={onMoodChange} />
+      <BadgeScale title="Sleep quality" scale={SleepScale} value={sleep} onChange={onSleepChange} />
 
-// ─── Step 5 — Medications + Note ─────────────────────────────────────────────
-
-function StepMedsNote({
-  medicationIds, note, onMedsChange, onNoteChange,
-}: {
-  medicationIds: number[]; note: string;
-  onMedsChange: (v: number[]) => void; onNoteChange: (v: string) => void;
-}) {
-  const [meds, setMeds] = useState<Medication[]>([]);
-
-  useEffect(() => {
-    getMedications().then(setMeds).catch(console.error);
-  }, []);
-
-  function toggleMed(id: number) {
-    onMedsChange(
-      medicationIds.includes(id) ? medicationIds.filter(m => m !== id) : [...medicationIds, id]
-    );
-  }
-
-  return (
-    <>
-      <Text style={s.heading}>Medications and notes</Text>
-
-      <Text style={s.sectionTitle}>Medications taken</Text>
-      <Text style={s.sub}>Quick reference only — optional</Text>
-
-      {meds.length === 0 ? (
-        <Text style={s.emptyMeds}>No medications added yet.</Text>
-      ) : (
-        <View style={s.medList}>
-          {meds.map(med => {
-            const on = medicationIds.includes(med.id);
-            return (
-              <TouchableOpacity
-                key={med.id}
-                style={[s.medRow, on && s.medRowOn]}
-                onPress={() => toggleMed(med.id)}
-                activeOpacity={0.75}
-              >
-                <View style={[s.checkbox, on && s.checkboxOn]}>
-                  {on && <Ionicons name="checkmark" size={14} color="#fff" />}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.medName}>{med.name}</Text>
-                  {med.dose ? <Text style={s.medDose}>{med.dose}</Text> : null}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
-
-      <Text style={[s.sectionTitle, { marginTop: Spacing.lg }]}>Note for your provider</Text>
+      <Text style={s.sectionTitle}>Note for your provider</Text>
       <TextInput
         style={s.noteInput}
-        placeholder="Anything your provider should know..."
-        placeholderTextColor={Colors.textSecondary}
+        placeholder="Anything your provider should know…"
+        placeholderTextColor={Colors.textFaint}
         value={note}
         onChangeText={onNoteChange}
         multiline
@@ -325,7 +236,7 @@ function Toast({ visible }: { visible: boolean }) {
 
   return (
     <Animated.View style={[toast.wrap, { opacity }]} pointerEvents="none">
-      <Ionicons name="checkmark-circle" size={18} color="#fff" />
+      <Ionicons name="checkmark-circle" size={18} color={Colors.toastText} />
       <Text style={toast.text}>Pain log saved</Text>
     </Animated.View>
   );
@@ -335,21 +246,21 @@ const toast = StyleSheet.create({
   wrap: {
     position: 'absolute', bottom: 100, alignSelf: 'center',
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.med, paddingHorizontal: 20, paddingVertical: 12,
-    borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, elevation: 4,
+    backgroundColor: Colors.toastBg, paddingHorizontal: 20, paddingVertical: 12,
+    borderRadius: 24,
   },
-  text: { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: '#fff', fontWeight: '600' },
+  text: { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.toastText, fontWeight: '600' },
 });
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
 
 export default function LogPainScreen() {
-  const [step, setStep]         = useState(1);
-  const [data, setData]         = useState<WizardData>(EMPTY);
-  const [submitting, setSubmitting] = useState(false);
-  const [toastVisible, setToastVisible] = useState(false);
+  const [step, setStep]                     = useState(1);
+  const [data, setData]                     = useState<WizardData>(EMPTY);
+  const [submitting, setSubmitting]         = useState(false);
+  const [toastVisible, setToastVisible]     = useState(false);
 
   useEffect(() => {
     getLatestEntry().then(entry => {
@@ -389,9 +300,8 @@ export default function LogPainScreen() {
     return false;
   }
 
-  async function handleNext() {
-    if (step < TOTAL_STEPS) { setStep(s => s + 1); return; }
-    // Step 5 — submit
+  async function saveEntry(): Promise<boolean> {
+    if (submitting) return false;
     setSubmitting(true);
     try {
       await insertEntry({
@@ -402,25 +312,38 @@ export default function LogPainScreen() {
         triggers:       data.triggers,
         mood:           data.mood,
         sleep_quality:  data.sleep_quality,
-        medication_ids: data.medication_ids,
+        medication_ids: [],
         note:           data.note.trim() || null,
       });
-      // Best-effort dose log — failures are silent; pain entry is already saved.
-      if (data.medication_ids.length > 0) {
-        await Promise.allSettled(data.medication_ids.map(id => logDoseNow(id)));
-      }
-      setToastVisible(true);
-      setTimeout(() => router.back(), 1600);
+      return true;
     } catch (e) {
       console.error(e);
-      Alert.alert('Something went wrong', 'Could not save your pain log. Please try again.');
+      Alert.alert('Couldn\'t save', 'Please try again.');
+      return false;
     } finally {
       setSubmitting(false);
     }
   }
 
-  const nextLabel = step === TOTAL_STEPS ? 'Save Pain Log' : 'Next';
-  const disabled  = nextDisabled() || submitting;
+  async function handleSavePainLog() {
+    const ok = await saveEntry();
+    if (!ok) return;
+    setToastVisible(true);
+    setTimeout(() => router.back(), 1600);
+  }
+
+  async function handleSaveAndLogMedication() {
+    const ok = await saveEntry();
+    if (!ok) return;
+    router.replace('/log-medication' as never);
+  }
+
+  function handleNext() {
+    if (step < TOTAL_STEPS) setStep(s => s + 1);
+  }
+
+  const isLastStep = step === TOTAL_STEPS;
+  const disabled   = nextDisabled() || submitting;
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
@@ -456,33 +379,48 @@ export default function LogPainScreen() {
           )}
           {step === 4 && (
             <StepMoodSleep
-              mood={data.mood} sleep={data.sleep_quality}
+              mood={data.mood} sleep={data.sleep_quality} note={data.note}
               onMoodChange={v => patch('mood', v)}
               onSleepChange={v => patch('sleep_quality', v)}
-            />
-          )}
-          {step === 5 && (
-            <StepMedsNote
-              medicationIds={data.medication_ids} note={data.note}
-              onMedsChange={v => patch('medication_ids', v)}
               onNoteChange={v => patch('note', v)}
             />
           )}
         </ScrollView>
 
-        {/* Footer nav */}
+        {/* Footer */}
         <View style={s.footer}>
-          <TouchableOpacity
-            style={[s.nextBtn, disabled && s.nextBtnDisabled]}
-            onPress={handleNext}
-            disabled={disabled}
-            activeOpacity={0.85}
-          >
-            <Text style={s.nextLabel}>{submitting ? 'Saving…' : nextLabel}</Text>
-            {!submitting && step < TOTAL_STEPS && (
+          {isLastStep ? (
+            <>
+              <TouchableOpacity
+                style={[s.primaryBtn, submitting && s.btnDisabled]}
+                onPress={handleSavePainLog}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                <Text style={s.primaryBtnLabel}>
+                  {submitting ? 'Saving…' : 'Save Pain Log'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.secondaryBtn, submitting && s.btnDisabled]}
+                onPress={handleSaveAndLogMedication}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                <Text style={s.secondaryBtnLabel}>Save and Log Medication</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={[s.primaryBtn, disabled && s.btnDisabled]}
+              onPress={handleNext}
+              disabled={disabled}
+              activeOpacity={0.85}
+            >
+              <Text style={s.primaryBtnLabel}>Next</Text>
               <Ionicons name="arrow-forward" size={18} color="#fff" />
-            )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+          )}
         </View>
 
       </KeyboardAvoidingView>
@@ -495,56 +433,51 @@ export default function LogPainScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root:    { flex: 1, backgroundColor: Colors.bg },
-  header:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: Spacing.md },
+  root:      { flex: 1, backgroundColor: Colors.painLight },
+  header:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: Spacing.md },
   headerBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: Spacing.lg, paddingBottom: Spacing.xl },
+  content:   { padding: Spacing.lg, paddingBottom: Spacing.xl },
 
-  heading: { fontFamily: FontFamily.sans, fontSize: FontSize.sectionHeading, fontWeight: '600', color: Colors.text, letterSpacing: -0.3, marginBottom: 6 },
-  sub:     { fontFamily: FontFamily.sans, fontSize: FontSize.bodySmall, color: Colors.textSecondary, marginBottom: Spacing.lg },
-  sectionTitle: { fontFamily: FontFamily.sans, fontSize: FontSize.label, fontWeight: '600', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.sm },
+  heading:      { fontFamily: FontFamily.sans, fontSize: FontSize.sectionHeading, fontWeight: '700', color: Colors.text, marginBottom: Spacing.md },
+  sectionTitle: { fontFamily: FontFamily.sans, fontSize: FontSize.label, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.sm },
 
   // Pain score list
-  painList:     { backgroundColor: Colors.card, borderRadius: Radius.card, overflow: 'hidden', ...require('@/constants/theme').Shadow.card },
-  painRow:      { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, height: TouchTarget.min, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  painRowSelected: { backgroundColor: Colors.painLight },
-  painBadge:    { width: 34, height: 34, borderRadius: Radius.badge, alignItems: 'center', justifyContent: 'center' },
-  painBadgeNum: { fontFamily: FontFamily.sans, fontSize: 15, fontWeight: '700' },
-  painRowLabel: { flex: 1, fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.text },
+  painList:          { backgroundColor: Colors.card, borderRadius: Radius.card, overflow: 'hidden' },
+  painRow:           { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, height: TouchTarget.min, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  painRowSelected:   { backgroundColor: Colors.painLight },
+  painBadge:         { width: 34, height: 34, borderRadius: Radius.badge, alignItems: 'center', justifyContent: 'center' },
+  painBadgeNum:      { fontFamily: FontFamily.sans, fontSize: 15, fontWeight: '700' },
+  painRowLabel:      { flex: 1, fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.text },
   painRowLabelSelected: { fontWeight: '600' },
 
-  // Chip grid
-  chipGrid:  { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  chip:      { paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.chip, backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.border },
-  chipOn:    { backgroundColor: Colors.painLight, borderColor: Colors.pain },
-  chipLabel: { fontFamily: FontFamily.sans, fontSize: FontSize.bodySmall, color: Colors.text },
-  chipLabelOn: { color: Colors.pain, fontWeight: '600' },
+  // Chip grid (step 3)
+  chipGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  chip:         { paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.chip, backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.border },
+  chipOn:       { backgroundColor: Colors.painLight, borderColor: Colors.pain },
+  chipLabel:    { fontFamily: FontFamily.sans, fontSize: FontSize.bodySmall, color: Colors.text },
+  chipLabelOn:  { color: Colors.pain, fontWeight: '600' },
 
-  // Emoji scale
-  emojiRow:  { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.sm },
-  emojiBtn:  { alignItems: 'center', gap: 4, padding: 8, borderRadius: 12, flex: 1 },
-  emojiBtnOn: { backgroundColor: Colors.card },
-  emojiChar: { fontSize: 32 },
-  emojiNum:  { fontFamily: FontFamily.sans, fontSize: FontSize.label, color: Colors.textSecondary },
-  emojiNumOn: { color: Colors.text, fontWeight: '600' },
-  emojiSelectedLabel: { fontFamily: FontFamily.sans, fontSize: FontSize.bodySmall, color: Colors.textSecondary, textAlign: 'center', marginTop: 8 },
-
-  // Meds
-  emptyMeds: { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.textSecondary, marginBottom: Spacing.md },
-  medList:   { backgroundColor: Colors.card, borderRadius: Radius.card, overflow: 'hidden', marginBottom: Spacing.md },
-  medRow:    { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, height: TouchTarget.min, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  medRowOn:  { backgroundColor: Colors.medLight },
-  checkbox:  { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' },
-  checkboxOn: { backgroundColor: Colors.med, borderColor: Colors.med },
-  medName:   { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.text },
-  medDose:   { fontFamily: FontFamily.sans, fontSize: FontSize.label, color: Colors.textSecondary },
+  // Badge scale (step 4 — mood + sleep)
+  badgeRow:    { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.sm },
+  badgeBtn:    { alignItems: 'center', gap: 4, flex: 1, borderRadius: Radius.badge, padding: 4 },
+  badge:       { width: 50, height: 50, borderRadius: Radius.badge, alignItems: 'center', justifyContent: 'center' },
+  badgeNum:    { fontFamily: FontFamily.sans, fontSize: FontSize.body, fontWeight: '700' },
+  badgeLabel:  { fontFamily: FontFamily.sans, fontSize: FontSize.label, color: Colors.textSecondary, textAlign: 'center' },
 
   // Note
-  noteInput: { backgroundColor: Colors.card, borderRadius: Radius.card, padding: Spacing.md, fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.text, minHeight: 100, borderWidth: 1.5, borderColor: Colors.border },
+  noteInput: {
+    backgroundColor: Colors.card, borderRadius: Radius.card,
+    padding: Spacing.md, fontFamily: FontFamily.sans, fontSize: FontSize.body,
+    color: Colors.text, minHeight: 100, borderWidth: 1.5,
+    borderColor: Colors.border, textAlignVertical: 'top',
+    marginTop: Spacing.sm,
+  },
 
   // Footer
-  footer:  { padding: Spacing.lg, paddingTop: Spacing.sm },
-  nextBtn: { height: TouchTarget.primary, borderRadius: Radius.button, backgroundColor: Colors.brand, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  nextBtnDisabled: { opacity: 0.4 },
-  nextLabel: { fontFamily: FontFamily.sans, fontSize: FontSize.bodyLarge, fontWeight: '600', color: '#fff' },
+  footer:           { padding: Spacing.lg, paddingTop: Spacing.sm, gap: Spacing.sm },
+  primaryBtn:       { height: 54, borderRadius: Radius.button, backgroundColor: Colors.pain, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  primaryBtnLabel:  { fontFamily: FontFamily.sans, fontSize: FontSize.bodyLarge, fontWeight: '600', color: '#fff' },
+  secondaryBtn:     { height: 46, borderRadius: Radius.button, borderWidth: 2, borderColor: Colors.med, alignItems: 'center', justifyContent: 'center' },
+  secondaryBtnLabel:{ fontFamily: FontFamily.sans, fontSize: FontSize.body, fontWeight: '600', color: Colors.med },
+  btnDisabled:      { opacity: 0.4 },
 });
