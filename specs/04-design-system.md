@@ -242,23 +242,27 @@ Both glyph colors use their badge's `fg` value (white on dark, dark on mid-tone)
 
 ### Body map (wizard step 2)
 
-Location selection uses an anatomical front/back silhouette instead of chip-only input.
+Location selection uses real anatomical silhouette images with circular hit targets
+overlaid as an SVG layer. See `design/body-map-coordinates.md` for the full coordinate
+reference and implementation notes.
 
-- Two silhouettes side by side: Front / Back
-- Abstract but anatomically proportioned SVG — head, neck, shoulders, arms, hands,
-  torso, hips, legs, feet
-- Zone hit targets: invisible circles/ellipses positioned over correct anatomy;
-  become visible (pain color, ~55% opacity) on tap
-- Selected zone names echoed as chips below the map for accessibility and confirmation
-- Chips are alphabetical
-- Side-by-side is the default layout; a stacked single-view with Front/Back toggle
-  should be validated in prototype testing (especially iPhone SE)
+**Images:**
+- `body-anatomy-front.png` — 381 × 917 px, transparent background
+- `body-anatomy-back.png` — 381 × 917 px, transparent background
+- Displayed side by side at equal width inside the step card
 
-**Front zones (11):** Head, Neck, Shoulders, Left/Right Arm, Left/Right Hand,
-Chest, Abdomen, Hips, Left/Right Leg, Left/Right Foot
+**Hit targets:**
+- Circular SVG overlays positioned per the coordinate table in `design/body-map-coordinates.md`
+- Ghost ring always visible (dashed, `Colors.pain` at low opacity) — communicates tappability
+- Active fill: `rgba(168, 74, 66, 0.38)` with `rgba(168, 74, 66, 0.85)` stroke
+- Selected zone names echoed as chips below the map (alphabetical)
 
-**Back zones (11):** Head, Neck, Shoulders, Left/Right Arm, Left/Right Hand,
-Upper Back, Lower Back, Hips, Left/Right Leg, Left/Right Foot
+**Regions (12):** Head / Face, Neck, Shoulders, Arms / Elbows / Wrists, Hands,
+Chest (front), Upper Back (back), Lower Back (back), Abdomen (front),
+Hips / Pelvis, Legs / Knees, Feet
+
+**Side-by-side is the default layout.** A stacked single-view with Front/Back toggle
+should be validated in prototype testing on iPhone SE (smallest supported device).
 
 ### Widget cards (Home screen)
 
