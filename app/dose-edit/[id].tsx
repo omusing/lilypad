@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   title: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
   },

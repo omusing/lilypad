@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   title: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
   },
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   emptyTitle: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
     textAlign: 'center',

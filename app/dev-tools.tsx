@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  title:   { fontFamily: FontFamily.serif, fontSize: FontSize.sectionHeading, color: Colors.text },
+  title:   { fontFamily: FontFamily.sans, fontSize: FontSize.sectionHeading, color: Colors.text },
   backBtn: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: Colors.card,

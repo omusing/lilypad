@@ -280,7 +280,7 @@ const sheet = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  title:     { fontFamily: FontFamily.serif, fontSize: FontSize.body + 1, color: Colors.text, fontWeight: '600' },
+  title:     { fontFamily: FontFamily.sans, fontSize: FontSize.body + 1, color: Colors.text, fontWeight: '600' },
   cancel:    { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.textSecondary },
   save:      { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.med, fontWeight: '600' },
   scroll:    { padding: Spacing.lg, paddingBottom: Spacing.xl },
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   heading: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
   },
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   emptyTitle: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
   },

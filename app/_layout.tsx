@@ -4,14 +4,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import {
   useFonts,
-  Fraunces_600SemiBold,
-  Fraunces_400Regular,
-} from '@expo-google-fonts/fraunces';
-import {
-  InstrumentSans_400Regular,
-  InstrumentSans_500Medium,
-  InstrumentSans_600SemiBold,
-} from '@expo-google-fonts/instrument-sans';
+  SourceSans3_400Regular,
+  SourceSans3_500Medium,
+  SourceSans3_600SemiBold,
+  SourceSans3_700Bold,
+} from '@expo-google-fonts/source-sans-3';
 import { runMigrations } from '@/db/migrate';
 import { getSettings } from '@/db/settings';
 
@@ -22,11 +19,10 @@ export default function RootLayout() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   const [fontsLoaded] = useFonts({
-    Fraunces: Fraunces_400Regular,
-    FrauncesSemiBold: Fraunces_600SemiBold,
-    InstrumentSans: InstrumentSans_400Regular,
-    InstrumentSansMedium: InstrumentSans_500Medium,
-    InstrumentSansSemiBold: InstrumentSans_600SemiBold,
+    SourceSans3:          SourceSans3_400Regular,
+    SourceSans3Medium:    SourceSans3_500Medium,
+    SourceSans3SemiBold:  SourceSans3_600SemiBold,
+    SourceSans3Bold:      SourceSans3_700Bold,
   });
 
   useEffect(() => {
@@ -71,6 +67,10 @@ export default function RootLayout() {
         <Stack.Screen
           name="entry/[id]"
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="dose-edit/[id]"
+          options={{ presentation: 'card' }}
         />
         <Stack.Screen name="settings"   options={{ presentation: 'card' }} />
         <Stack.Screen name="about"      options={{ presentation: 'card' }} />

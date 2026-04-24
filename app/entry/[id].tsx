@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerTitle: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.body + 1,
     color: Colors.text,
     fontWeight: '600',
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   painNumber: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: 32,
     fontWeight: '600',
     lineHeight: 36,
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyTitle: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
   },

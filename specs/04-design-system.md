@@ -243,7 +243,7 @@ Both glyph colors use their badge's `fg` value (white on dark, dark on mid-tone)
 ### Body map (wizard step 2)
 
 Location selection uses real anatomical silhouette images with circular hit targets
-overlaid as an SVG layer. See `design/body-map-coordinates.md` for the full coordinate
+overlaid as an SVG layer. See `body-map-coordinates.md` for the full coordinate
 reference and implementation notes.
 
 **Images:**
@@ -252,7 +252,7 @@ reference and implementation notes.
 - Displayed side by side at equal width inside the step card
 
 **Hit targets:**
-- Circular SVG overlays positioned per the coordinate table in `design/body-map-coordinates.md`
+- Circular SVG overlays positioned per the coordinate table in `body-map-coordinates.md`
 - Ghost ring always visible (dashed, `Colors.pain` at low opacity) — communicates tappability
 - Active fill: `rgba(168, 74, 66, 0.38)` with `rgba(168, 74, 66, 0.85)` stroke
 - Selected zone names echoed as chips below the map (alphabetical)

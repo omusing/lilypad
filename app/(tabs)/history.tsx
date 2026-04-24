@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   heading: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
   },
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   painNumber: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: 20,
     fontWeight: '600',
   },
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   emptyTitle: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
   },

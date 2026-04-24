@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   heading: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
   },
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   },
   statCardFlex: { flex: 1 },
   statNumber: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: 28,
     color: Colors.text,
   },
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   emptyTitle: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
   },

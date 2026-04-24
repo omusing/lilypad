@@ -114,7 +114,7 @@ const step = StyleSheet.create({
     ...Shadow.card,
   },
   heading: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,
     color: Colors.text,
     textAlign: 'center',

@@ -500,7 +500,7 @@ const s = StyleSheet.create({
   headerBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   content: { padding: Spacing.lg, paddingBottom: Spacing.xl },
 
-  heading: { fontFamily: FontFamily.serif, fontSize: FontSize.sectionHeading, fontWeight: '600', color: Colors.text, letterSpacing: -0.3, marginBottom: 6 },
+  heading: { fontFamily: FontFamily.sans, fontSize: FontSize.sectionHeading, fontWeight: '600', color: Colors.text, letterSpacing: -0.3, marginBottom: 6 },
   sub:     { fontFamily: FontFamily.sans, fontSize: FontSize.bodySmall, color: Colors.textSecondary, marginBottom: Spacing.lg },
   sectionTitle: { fontFamily: FontFamily.sans, fontSize: FontSize.label, fontWeight: '600', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Spacing.sm },
 

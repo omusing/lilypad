@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     marginRight: Spacing.md,
   },
   greeting: {
-    fontFamily: FontFamily.serif,
+    fontFamily: FontFamily.sans,
     fontSize: FontSize.greeting,
     color: Colors.text,
     letterSpacing: -0.5,
