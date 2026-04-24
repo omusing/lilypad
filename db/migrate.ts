@@ -45,6 +45,13 @@ const MIGRATIONS: { version: number; sql: string }[] = [
     version: 2,
     sql: `ALTER TABLE medications ADD COLUMN catalog_rxcui TEXT;`,
   },
+  {
+    version: 3,
+    sql: `
+      ALTER TABLE medication_doses ADD COLUMN quantity   INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE medication_doses ADD COLUMN updated_at TEXT;
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

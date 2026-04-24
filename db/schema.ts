@@ -69,8 +69,10 @@ export type MedicationUpdate = Partial<Pick<Medication, 'name' | 'dose' | 'route
 export interface DoseRow {
   id:            number;
   medication_id: number;
-  taken_at:      string;        // ISO 8601
+  taken_at:      string;        // ISO 8601 — user-recorded time, editable
+  quantity:      number;        // units taken in this session, ≥ 1
   note:          string | null;
+  updated_at:    string | null; // ISO 8601, null until first edit
 }
 
 export type Dose = DoseRow; // no JSON columns, types match directly

@@ -77,6 +77,7 @@ for the full policy (additive-only, immutable migrations, programmatic test cons
 |---|---|---|
 | 1 | Initial schema | 1.0.0 |
 | 2 | `medications.catalog_rxcui TEXT` | 1.x.x (pending) |
+| 3 | `medication_doses.quantity INTEGER NOT NULL DEFAULT 1` + `medication_doses.updated_at TEXT` | 1.x.x (pending) |
 
 ---
 

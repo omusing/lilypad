@@ -27,6 +27,13 @@ export const Colors = {
 
   // UI chrome (tab bar active, focus rings)
   brand:         '#2E7D5E',
+
+  // Dividers / separators
+  divider:       '#C8D9D3',
+
+  // Toast
+  toastBg:       '#1C2523',
+  toastText:     '#F4FAF6',
 } as const;
 
 // Pain scale badge colors (0–10).

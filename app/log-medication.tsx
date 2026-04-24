@@ -9,10 +9,9 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, TouchTarget } from '@/constants/theme';
 import { getMedications } from '@/db/medications';
-import { logDoseNow } from '@/db/doses';
+import { logDosesBatch, getLastDoseByMedication } from '@/db/doses';
 import type { Medication } from '@/db/schema';
 import { timeAgo } from '@/lib/time';
-import { getLastDoseByMedication } from '@/db/doses';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -32,7 +31,7 @@ function Toast({ visible }: { visible: boolean }) {
   return (
     <Animated.View style={[toast.wrap, { opacity }]} pointerEvents="none">
       <Ionicons name="checkmark-circle" size={18} color="#fff" />
-      <Text style={toast.text}>Dose logged</Text>
+      <Text style={toast.text}>Doses logged</Text>
     </Animated.View>
   );
 }
@@ -41,22 +40,85 @@ const toast = StyleSheet.create({
   wrap: {
     position: 'absolute', bottom: 40, alignSelf: 'center',
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.med, paddingHorizontal: 20, paddingVertical: 12,
+    backgroundColor: Colors.toastBg, paddingHorizontal: 20, paddingVertical: 12,
     borderRadius: 24,
   },
-  text: { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: '#fff', fontWeight: '600' },
+  text: { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.toastText, fontWeight: '600' },
+});
+
+// ─── Stepper ──────────────────────────────────────────────────────────────────
+
+function Stepper({ count, onChange }: { count: number; onChange: (n: number) => void }) {
+  return (
+    <View style={step.row}>
+      <TouchableOpacity
+        style={[step.btn, count === 0 && step.btnZero]}
+        onPress={() => onChange(Math.max(0, count - 1))}
+        hitSlop={8}
+        activeOpacity={0.75}
+      >
+        <Text style={step.btnLabel}>−</Text>
+      </TouchableOpacity>
+
+      <Text style={step.count}>{count}</Text>
+
+      <TouchableOpacity
+        style={step.btn}
+        onPress={() => onChange(count + 1)}
+        hitSlop={8}
+        activeOpacity={0.75}
+      >
+        <Text style={step.btnLabel}>+</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const step = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  btn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.med,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnZero: {
+    backgroundColor: Colors.border,
+  },
+  btnLabel: {
+    fontFamily: FontFamily.sans,
+    fontSize: 20,
+    color: '#fff',
+    lineHeight: 24,
+    fontWeight: '500',
+  },
+  count: {
+    fontFamily: FontFamily.sans,
+    fontSize: FontSize.body,
+    fontWeight: '600',
+    color: Colors.text,
+    minWidth: 24,
+    textAlign: 'center',
+  },
 });
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function LogMedicationScreen() {
-  const [medications, setMedications]     = useState<Medication[]>([]);
-  const [lastDoseMap, setLastDoseMap]     = useState<Record<number, string>>({});
-  const [selectedId, setSelectedId]       = useState<number | null>(null);
-  const [note, setNote]                   = useState('');
-  const [submitting, setSubmitting]       = useState(false);
-  const [toastVisible, setToastVisible]   = useState(false);
-  const [loaded, setLoaded]               = useState(false);
+  const [medications, setMedications]   = useState<Medication[]>([]);
+  const [lastDoseMap, setLastDoseMap]   = useState<Record<number, string>>({});
+  // counts: medicationId → number of doses to log (0 = not selected)
+  const [counts, setCounts]             = useState<Record<number, number>>({});
+  const [note, setNote]                 = useState('');
+  const [submitting, setSubmitting]     = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [loaded, setLoaded]             = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -70,19 +132,27 @@ export default function LogMedicationScreen() {
     })();
   }, []);
 
+  function setCount(medId: number, n: number) {
+    setCounts(c => ({ ...c, [medId]: n }));
+  }
+
+  const totalDoses = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  const canLog = totalDoses > 0;
+
   async function handleLog() {
-    if (selectedId === null || submitting) return;
+    if (!canLog || submitting) return;
     setSubmitting(true);
     try {
-      await logDoseNow(selectedId, note.trim() || undefined);
+      const nonZero = Object.fromEntries(
+        Object.entries(counts).filter(([, n]) => n > 0).map(([id, n]) => [Number(id), n])
+      );
+      await logDosesBatch(nonZero, note.trim() || undefined);
       setToastVisible(true);
       setTimeout(() => router.back(), 1700);
     } finally {
       setSubmitting(false);
     }
   }
-
-  const canLog = selectedId !== null;
 
   // ── Empty state ──
   if (loaded && medications.length === 0) {
@@ -135,27 +205,26 @@ export default function LogMedicationScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Section label */}
-          <Text style={styles.sectionLabel}>Which medication did you take?</Text>
+          <Text style={styles.sectionLabel}>Use + to set how many doses you took</Text>
 
-          {/* Medication list */}
+          {/* Medication list with steppers */}
           <View style={styles.medList}>
             {medications.map((med, i) => {
-              const selected = selectedId === med.id;
-              const lastAt   = lastDoseMap[med.id];
-              const isLast   = i === medications.length - 1;
+              const count  = counts[med.id] ?? 0;
+              const lastAt = lastDoseMap[med.id];
+              const isLast = i === medications.length - 1;
+              const active = count > 0;
               return (
-                <TouchableOpacity
+                <View
                   key={med.id}
                   style={[
                     styles.medRow,
-                    selected && styles.medRowSelected,
+                    active && styles.medRowActive,
                     !isLast && styles.medRowBorder,
                   ]}
-                  onPress={() => setSelectedId(selected ? null : med.id)}
-                  activeOpacity={0.7}
                 >
                   <View style={styles.medInfo}>
-                    <Text style={[styles.medName, selected && styles.medNameSelected]}>
+                    <Text style={[styles.medName, active && styles.medNameActive]}>
                       {med.name}
                     </Text>
                     {(med.dose || med.route) ? (
@@ -167,10 +236,8 @@ export default function LogMedicationScreen() {
                       <Text style={styles.medLastDose}>Last dose {timeAgo(lastAt)}</Text>
                     ) : null}
                   </View>
-                  <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-                    {selected && <Ionicons name="checkmark" size={16} color="#fff" />}
-                  </View>
-                </TouchableOpacity>
+                  <Stepper count={count} onChange={n => setCount(med.id, n)} />
+                </View>
               );
             })}
           </View>
@@ -201,7 +268,7 @@ export default function LogMedicationScreen() {
           >
             <Ionicons name="medical" size={20} color="#fff" />
             <Text style={styles.logBtnLabel}>
-              {submitting ? 'Logging...' : 'Log Dose'}
+              {submitting ? 'Logging...' : 'Log Doses'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -217,7 +284,7 @@ export default function LogMedicationScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.bg,
+    backgroundColor: Colors.medLight,
   },
 
   header: {
@@ -277,12 +344,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 14,
     minHeight: TouchTarget.min,
+    gap: Spacing.sm,
   },
   medRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  medRowSelected: {
+  medRowActive: {
     backgroundColor: Colors.medLight,
   },
   medInfo: {
@@ -295,7 +363,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontWeight: '500',
   },
-  medNameSelected: {
+  medNameActive: {
     color: Colors.med,
     fontWeight: '600',
   },
@@ -309,20 +377,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.label,
     color: Colors.textSecondary,
     marginTop: 2,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: Spacing.md,
-  },
-  checkboxSelected: {
-    backgroundColor: Colors.med,
-    borderColor: Colors.med,
   },
 
   // Note

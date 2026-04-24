@@ -398,8 +398,11 @@ letter-spacing 1.2px. Format: `─────── APRIL 17 ──────
 
 **Medication card:**
 - Left border in `med` green
-- Medication name, dose strength, time, count (e.g. "×2")
-- Tap → Medication Detail
+- Medication name, time
+- Dose line: `{quantity}× {dose}` always (e.g. "2× 300mg", "1× 400mg"). Never computed
+  as a total — the quantity and the per-unit dose are always shown separately so the
+  provider reads exactly what was taken per pill, not an arithmetic result.
+- Tap → Dose Edit screen
 
 **Delete:**
 - Swipe left on either card type → "Delete" action (red)
@@ -483,6 +486,45 @@ is selected.
 - "Show archived" toggle or section at bottom of list to reveal archived medications.
 
 **Empty state:** "No medications added. Tap + to add your first medication."
+
+---
+
+## Dose Edit
+
+Opened by tapping a medication card in Timeline. Edits a single `medication_doses` row.
+
+**Header:** "Edit Dose", "Cancel" (left), "Save" (right).
+
+**Medication picker:**
+Shows the union of:
+- The medication referenced by this dose row (always shown, even if archived — so the
+  user can see what was originally logged and adjust or remove it)
+- All currently active medications (`is_active = 1`)
+
+Steppers pre-populated: the medication matching `medication_id` starts at `quantity`;
+all others start at 0. The user can shift quantity to a different medication (e.g. they
+logged Ibuprofen but meant Naproxen) by zeroing one and incrementing another.
+
+**Time field:**
+Shows `taken_at` as an editable date + time. Uses `@react-native-community/datetimepicker`
+(mode="datetime"). Future times disabled. Defaults to the stored `taken_at` value.
+
+**Note field:** Pre-populated from stored `note`. Optional.
+
+**On save:**
+- If exactly one medication has count > 0: update the existing row (`medication_id`,
+  `quantity`, `taken_at`, `note`, `updated_at` = now).
+- If the user has zeroed all counts: treat as delete (same confirmation as delete button).
+- If multiple medications have count > 0: this represents a correction where the user
+  is splitting a session across medications. Update the original row to the first
+  medication, insert new rows for the rest. Each new row gets the same `taken_at`.
+
+**Delete button** (destructive, bottom of screen):
+- Confirmation: "Delete this dose record? This cannot be undone."
+- On confirm: delete the `medication_doses` row, pop back to Timeline.
+
+**Save error:** Show error toast "Couldn't save — please try again." Screen stays open
+with all data intact.
 
 ---
 

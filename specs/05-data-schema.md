@@ -93,14 +93,16 @@ CREATE TABLE IF NOT EXISTS medications (
 
 ### `medication_doses`
 
-One row per dose taken. Event log — never edited or deleted.
+One row per intake session. A session is one user action: "I took [medication], [quantity] times, at [time]." Rows are editable and deletable. See [decisions/009-dose-quantity-and-editability.md](decisions/009-dose-quantity-and-editability.md) for rationale.
 
 ```sql
 CREATE TABLE IF NOT EXISTS medication_doses (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   medication_id  INTEGER NOT NULL REFERENCES medications(id),
   taken_at       TEXT    NOT NULL,
-  note           TEXT
+  quantity       INTEGER NOT NULL DEFAULT 1,
+  note           TEXT,
+  updated_at     TEXT
 );
 ```
 
@@ -108,18 +110,22 @@ CREATE TABLE IF NOT EXISTS medication_doses (
 |---|---|---|---|
 | `id` | INTEGER | — | Auto-increment PK |
 | `medication_id` | INTEGER | No | FK → `medications.id` |
-| `taken_at` | TEXT | No | ISO 8601 precise system timestamp at the moment the user tapped "Took it now." |
-| `note` | TEXT | Yes | Optional free-text note per dose. Not exposed in V1 UI but preserved in export. |
+| `taken_at` | TEXT | No | ISO 8601 timestamp of when the user took this medication. Set to current time on insert. User-editable for back-dating. |
+| `quantity` | INTEGER | No | Number of units taken in this session (e.g. 2 pills). Default 1. Must be ≥ 1. |
+| `note` | TEXT | Yes | Optional free-text note. Shown in Dose Edit screen. |
+| `updated_at` | TEXT | Yes | ISO 8601 timestamp of the most recent edit. NULL until first edit. Set on every save. |
+
+**Timestamp semantics:**
+- `taken_at` = when the user recorded taking the medication (user-controlled, defaults to now, back-datable)
+- `updated_at` = when the row was last edited (system-controlled, set on save)
 
 **Note on `entries.medication_ids` and dose logging:** The JSON array in
-`entries.medication_ids` records which medications the user checked during the
-pain check-in wizard. On wizard submit, the app also inserts one `medication_doses`
-row per checked medication (`taken_at` = same precise system timestamp as
-`entries.created_at`, `note` = NULL) — these are shortcut dose records, identical
-to tapping "Took it now." A dose logged via "Took it now" (outside the wizard)
-appears in `medication_doses` the same way. The two paths are additive: both
-`entries.medication_ids` and `medication_doses` are populated when the wizard is
-submitted with medications checked.
+`entries.medication_ids` records which medications the user noted during the
+pain wizard. On wizard submit, the app inserts one `medication_doses` row per
+checked medication (`taken_at` = wizard submit timestamp, `quantity` = 1, `note` = NULL).
+A dose logged via Log Medication outside the wizard appears the same way. The two
+paths are additive: both `entries.medication_ids` and `medication_doses` are populated
+when the wizard is submitted with medications checked.
 
 ---
 
@@ -210,6 +216,7 @@ type changes.
 |---|---|
 | 1 | `CREATE TABLE entries`, `medications`, `medication_doses`, `app_settings` |
 | 2 | `ALTER TABLE medications ADD COLUMN catalog_rxcui TEXT` |
+| 3 | `ALTER TABLE medication_doses ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1` + `ALTER TABLE medication_doses ADD COLUMN updated_at TEXT` |
 
 ---
 
@@ -252,7 +259,9 @@ Full schema used by `lib/export.ts` and validated by `lib/import.ts`.
     {
       "medication_id": 1,
       "taken_at": "2026-04-12T08:00:00Z",
-      "note": null
+      "quantity": 2,
+      "note": null,
+      "updated_at": null
     }
   ]
 }

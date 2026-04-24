@@ -58,4 +58,5 @@ What to watch for in V1.1+ that might prompt revisiting.
 | [006](006-versioning-policy.md) | Versioning policy: migrations, testing, and release process | Active |
 | [007](007-visual-language.md) | Visual language: typography, glyph system, and color philosophy | Decided |
 | [008](008-unified-timeline.md) | Unified timeline: promoting the combined pain + medication view to V1 | Active |
+| [009](009-dose-quantity-and-editability.md) | Dose quantity and editability: replacing one-row-per-pill with editable intake sessions | Decided |
 

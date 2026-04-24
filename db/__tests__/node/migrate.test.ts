@@ -48,6 +48,13 @@ const MIGRATIONS: { version: number; sql: string }[] = [
     version: 2,
     sql: `ALTER TABLE medications ADD COLUMN catalog_rxcui TEXT;`,
   },
+  {
+    version: 3,
+    sql: `
+      ALTER TABLE medication_doses ADD COLUMN quantity   INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE medication_doses ADD COLUMN updated_at TEXT;
+    `,
+  },
 ];
 
 // ─── Test helper ─────────────────────────────────────────────────────────────
@@ -115,8 +122,8 @@ describe('Migration v1 — fresh install', () => {
 
   afterEach(() => db.close());
 
-  test('schema_version is set to 2 (latest)', () => {
-    expect(getSchemaVersion(db)).toBe(2);
+  test('schema_version is set to 3 (latest)', () => {
+    expect(getSchemaVersion(db)).toBe(3);
   });
 
   test('all four tables exist', () => {
@@ -145,7 +152,7 @@ describe('Migration v1 — fresh install', () => {
   });
 
   test('medication_doses table has required columns', () => {
-    const required = ['id', 'medication_id', 'taken_at', 'note'];
+    const required = ['id', 'medication_id', 'taken_at', 'note', 'quantity', 'updated_at'];
     for (const col of required) {
       expect(columnExists(db, 'medication_doses', col)).toBe(true);
     }
@@ -169,7 +176,7 @@ describe('Migration idempotency', () => {
       runMigrations(db);
       runMigrations(db, getSchemaVersion(db)); // second run — already at latest, no-op
     }).not.toThrow();
-    expect(getSchemaVersion(db)).toBe(2);
+    expect(getSchemaVersion(db)).toBe(3);
     db.close();
   });
 });
@@ -244,11 +251,104 @@ describe('Migration v2 — catalog_rxcui on medications', () => {
     db.close();
   });
 
-  test('fresh install at v2 has catalog_rxcui column', () => {
+  test('fresh install at v3 has catalog_rxcui column', () => {
     const db = openFreshDb();
     runMigrations(db);
-    expect(getSchemaVersion(db)).toBe(2);
+    expect(getSchemaVersion(db)).toBe(3);
     expect(columnExists(db, 'medications', 'catalog_rxcui')).toBe(true);
+    db.close();
+  });
+});
+
+describe('Migration v3 — quantity and updated_at on medication_doses', () => {
+  test('upgrades from v2: quantity + updated_at columns added, schema_version = 3', () => {
+    const db = openFreshDb();
+    runMigrations(db, 0, 2); // bring to v2 only
+    expect(getSchemaVersion(db)).toBe(2);
+    expect(columnExists(db, 'medication_doses', 'quantity')).toBe(false);
+    expect(columnExists(db, 'medication_doses', 'updated_at')).toBe(false);
+
+    runMigrations(db, 2, 3); // apply v3
+    expect(getSchemaVersion(db)).toBe(3);
+    expect(columnExists(db, 'medication_doses', 'quantity')).toBe(true);
+    expect(columnExists(db, 'medication_doses', 'updated_at')).toBe(true);
+    db.close();
+  });
+
+  test('existing dose row survives v2→v3, quantity defaults to 1, updated_at defaults to NULL', () => {
+    const db = openFreshDb();
+    runMigrations(db, 0, 2);
+
+    db.prepare(
+      `INSERT INTO medications (name, dose, route, frequency, created_at)
+       VALUES ('Ibuprofen', '400mg', 'oral', 'as needed', '2026-04-01T08:00:00Z')`
+    ).run();
+
+    const medId = (db.prepare('SELECT id FROM medications WHERE name = ?').get('Ibuprofen') as { id: number }).id;
+
+    db.prepare(
+      `INSERT INTO medication_doses (medication_id, taken_at, note)
+       VALUES (?, '2026-04-10T09:00:00Z', NULL)`
+    ).run(medId);
+
+    runMigrations(db, 2, 3);
+
+    const row = db.prepare('SELECT * FROM medication_doses WHERE medication_id = ?').get(medId) as Record<string, unknown>;
+    expect(row).toBeDefined();
+    expect(row.taken_at).toBe('2026-04-10T09:00:00Z');
+    expect(row.quantity).toBe(1);
+    expect(row.updated_at).toBeNull();
+    db.close();
+  });
+
+  test('fresh install at v3 has quantity and updated_at columns', () => {
+    const db = openFreshDb();
+    runMigrations(db);
+    expect(getSchemaVersion(db)).toBe(3);
+    expect(columnExists(db, 'medication_doses', 'quantity')).toBe(true);
+    expect(columnExists(db, 'medication_doses', 'updated_at')).toBe(true);
+    db.close();
+  });
+
+  test('quantity column accepts values > 1', () => {
+    const db = openFreshDb();
+    runMigrations(db);
+
+    db.prepare(
+      `INSERT INTO medications (name, dose, route, frequency, created_at)
+       VALUES ('Gabapentin', '300mg', 'oral', 'as needed', '2026-04-01T08:00:00Z')`
+    ).run();
+
+    const medId = (db.prepare('SELECT id FROM medications WHERE name = ?').get('Gabapentin') as { id: number }).id;
+
+    db.prepare(
+      `INSERT INTO medication_doses (medication_id, taken_at, quantity, note)
+       VALUES (?, '2026-04-10T09:00:00Z', 2, NULL)`
+    ).run(medId);
+
+    const row = db.prepare('SELECT * FROM medication_doses WHERE medication_id = ?').get(medId) as Record<string, unknown>;
+    expect(row.quantity).toBe(2);
+    db.close();
+  });
+
+  test('SUM(quantity) correctly aggregates multi-dose sessions', () => {
+    const db = openFreshDb();
+    runMigrations(db);
+
+    db.prepare(
+      `INSERT INTO medications (name, dose, route, frequency, created_at)
+       VALUES ('Naproxen', '220mg', 'oral', 'daily', '2026-04-01T08:00:00Z')`
+    ).run();
+
+    const medId = (db.prepare('SELECT id FROM medications WHERE name = ?').get('Naproxen') as { id: number }).id;
+
+    db.prepare(`INSERT INTO medication_doses (medication_id, taken_at, quantity) VALUES (?, '2026-04-10T09:00:00Z', 2)`).run(medId);
+    db.prepare(`INSERT INTO medication_doses (medication_id, taken_at, quantity) VALUES (?, '2026-04-11T09:00:00Z', 1)`).run(medId);
+
+    const row = db.prepare(
+      `SELECT medication_id, SUM(quantity) as total FROM medication_doses WHERE medication_id = ? GROUP BY medication_id`
+    ).get(medId) as { total: number };
+    expect(row.total).toBe(3);
     db.close();
   });
 });

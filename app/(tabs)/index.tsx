@@ -269,7 +269,11 @@ export default function HomeScreen() {
         </View>
 
         {/* ── Sparkline ── */}
-        <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => router.push('/(tabs)/timeline' as never)}
+          activeOpacity={0.85}
+        >
           <Text style={styles.cardLabel}>14-day pain trend</Text>
           {loading || !data ? (
             <ActivityIndicator color={Colors.textSecondary} style={{ paddingVertical: 20 }} />
@@ -282,7 +286,7 @@ export default function HomeScreen() {
               </View>
             </>
           )}
-        </View>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
