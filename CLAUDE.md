@@ -10,6 +10,11 @@ All project specifications live in [`specs/`](specs/). Start with the index:
 - [specs/03-architecture.md](specs/03-architecture.md) — tech stack, folder structure, patterns
 - [specs/04-design-system.md](specs/04-design-system.md) — colors, typography, components
 
+## Writing conventions
+
+- Never use em dashes (—) anywhere: in code, comments, specs, copy, or commit messages.
+- Use a regular hyphen (-) as a word or sentence separator instead.
+
 ## Design decisions and spec discipline
 
 `specs/` is the source of truth. gstack design docs in `~/.gstack/` are working notes only.
