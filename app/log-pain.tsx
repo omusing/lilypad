@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, TextInput,
-  StyleSheet, Alert, Animated, KeyboardAvoidingView, Platform,
-  useWindowDimensions,
+  StyleSheet, Alert, KeyboardAvoidingView, Platform,
+  useWindowDimensions, ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -13,6 +13,8 @@ import { QUALITIES } from '@/constants/qualities';
 import { TRIGGERS } from '@/constants/triggers';
 import { insertEntry, getLatestEntry } from '@/db/entries';
 import BodyMap from '@/components/BodyMap';
+import { RateChip } from '@/components/RateChip';
+import { Toast } from '@/components/Toast';
 
 // ─── Wizard state ─────────────────────────────────────────────────────────────
 
@@ -153,37 +155,36 @@ function StepQualitiesTriggers({
 
 // ─── Step 4 — Mood, sleep, note + exit actions ───────────────────────────────
 
-function BadgeScale({
+function RateChipScale({
   title,
   scale,
+  type,
   value,
   onChange,
 }: {
   title: string;
   scale: readonly ({ bg: string; text: string; label: string } | null)[];
+  type: 'mood' | 'sleep';
   value: number | null;
   onChange: (v: number) => void;
 }) {
   return (
     <View style={{ marginBottom: Spacing.xl }}>
       <Text style={s.sectionTitle}>{title}</Text>
-      <View style={s.badgeRow}>
+      <View style={s.rateRow}>
         {[1, 2, 3, 4, 5].map(v => {
           const entry = scale[v];
           if (!entry) return null;
-          const on = value === v;
           return (
             <TouchableOpacity
               key={v}
-              style={[s.badgeBtn, on && { borderColor: Colors.med, borderWidth: 3 }]}
+              style={s.rateBtn}
               onPress={() => onChange(v)}
               activeOpacity={0.75}
               accessibilityLabel={entry.label}
             >
-              <View style={[s.badge, { backgroundColor: entry.bg }]}>
-                <Text style={[s.badgeNum, { color: entry.text }]}>{v}</Text>
-              </View>
-              <Text style={s.badgeLabel}>{entry.label}</Text>
+              <RateChip size={50} scale={entry} payload={type} selected={value === v} />
+              <Text style={s.rateLabel}>{entry.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -204,8 +205,8 @@ function StepMoodSleep({
   return (
     <>
       <Text style={s.heading}>How are you feeling overall?</Text>
-      <BadgeScale title="Mood" scale={MoodScale} value={mood} onChange={onMoodChange} />
-      <BadgeScale title="Sleep quality" scale={SleepScale} value={sleep} onChange={onSleepChange} />
+      <RateChipScale title="Mood" scale={MoodScale} type="mood" value={mood} onChange={onMoodChange} />
+      <RateChipScale title="Sleep quality" scale={SleepScale} type="sleep" value={sleep} onChange={onSleepChange} />
 
       <Text style={s.sectionTitle}>Note for your provider</Text>
       <TextInput
@@ -222,36 +223,6 @@ function StepMoodSleep({
   );
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
-
-function Toast({ visible }: { visible: boolean }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.sequence([
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.delay(1200),
-      Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-    ]).start();
-  }, [visible]);
-
-  return (
-    <Animated.View style={[toast.wrap, { opacity }]} pointerEvents="none">
-      <Ionicons name="checkmark-circle" size={18} color={Colors.toastText} />
-      <Text style={toast.text}>Pain log saved</Text>
-    </Animated.View>
-  );
-}
-
-const toast = StyleSheet.create({
-  wrap: {
-    position: 'absolute', bottom: 100, alignSelf: 'center',
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.toastBg, paddingHorizontal: 20, paddingVertical: 12,
-    borderRadius: 24,
-  },
-  text: { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.toastText, fontWeight: '600' },
-});
-
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 const TOTAL_STEPS = 4;
@@ -263,18 +234,26 @@ export default function LogPainScreen() {
   const [toastVisible, setToastVisible]     = useState(false);
   // Tracks whether the user has made any explicit input — pre-loaded defaults don't count.
   const [userTouched, setUserTouched]       = useState(false);
+  const [ready, setReady]                   = useState(false);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
+    setStep(1);
+    setData(EMPTY);
+    setSubmitting(false);
+    setToastVisible(false);
+    setUserTouched(false);
+    setReady(false);
     getLatestEntry().then(entry => {
-      if (!entry) return;
-      setData(d => ({
-        ...d,
-        pain_regions:   entry.pain_regions,
-        pain_qualities: entry.pain_qualities,
-        triggers:       entry.triggers,
-      }));
-    }).catch(console.error);
-  }, []);
+      if (entry) {
+        setData(d => ({
+          ...d,
+          pain_regions:   entry.pain_regions,
+          pain_qualities: entry.pain_qualities,
+          triggers:       entry.triggers,
+        }));
+      }
+    }).catch(console.error).finally(() => setReady(true));
+  }, []));
 
   function patch<K extends keyof WizardData>(key: K, val: WizardData[K]) {
     setUserTouched(true);
@@ -347,6 +326,14 @@ export default function LogPainScreen() {
 
   const isLastStep = step === TOTAL_STEPS;
   const disabled   = nextDisabled() || submitting;
+
+  if (!ready) {
+    return (
+      <SafeAreaView style={s.root} edges={['top', 'bottom']}>
+        <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.xl }} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
@@ -428,7 +415,7 @@ export default function LogPainScreen() {
 
       </KeyboardAvoidingView>
 
-      {toastVisible && <Toast visible={toastVisible} />}
+      {toastVisible && <Toast visible={toastVisible} message="Pain log saved" />}
     </SafeAreaView>
   );
 }
@@ -442,13 +429,13 @@ const s = StyleSheet.create({
   content:   { padding: Spacing.lg, paddingBottom: Spacing.xl },
 
   heading:      { fontFamily: FontFamily.sans, fontSize: FontSize.sectionHeading, fontWeight: '700', color: Colors.text, marginBottom: Spacing.md },
-  sectionTitle: { fontFamily: FontFamily.sans, fontSize: FontSize.label, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: Spacing.sm },
+  sectionTitle: { fontFamily: FontFamily.sans, fontSize: FontSize.label, fontWeight: '600', color: Colors.text, marginBottom: Spacing.sm },
 
   // Pain score list
   painList:          { backgroundColor: Colors.card, borderRadius: Radius.card, overflow: 'hidden' },
   painRow:           { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, height: TouchTarget.min, borderBottomWidth: 1, borderBottomColor: Colors.border },
   painRowSelected:   { backgroundColor: Colors.painLight },
-  painBadge:         { width: 34, height: 34, borderRadius: Radius.badge, alignItems: 'center', justifyContent: 'center' },
+  painBadge:         { width: 34, height: 34, borderRadius: Radius.rateChip, alignItems: 'center', justifyContent: 'center' },
   painBadgeNum:      { fontFamily: FontFamily.sans, fontSize: 15, fontWeight: '700' },
   painRowLabel:      { flex: 1, fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.text },
   painRowLabelSelected: { fontWeight: '600' },
@@ -460,12 +447,10 @@ const s = StyleSheet.create({
   chipLabel:    { fontFamily: FontFamily.sans, fontSize: FontSize.bodySmall, color: Colors.text },
   chipLabelOn:  { color: Colors.pain, fontWeight: '600' },
 
-  // Badge scale (step 4 — mood + sleep)
-  badgeRow:    { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.sm },
-  badgeBtn:    { alignItems: 'center', gap: 4, flex: 1, borderRadius: Radius.badge, padding: 4 },
-  badge:       { width: 50, height: 50, borderRadius: Radius.badge, alignItems: 'center', justifyContent: 'center' },
-  badgeNum:    { fontFamily: FontFamily.sans, fontSize: FontSize.body, fontWeight: '700' },
-  badgeLabel:  { fontFamily: FontFamily.sans, fontSize: FontSize.label, color: Colors.textSecondary, textAlign: 'center' },
+  // Rate chip scale (step 4 — mood + sleep)
+  rateRow:   { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.sm },
+  rateBtn:   { alignItems: 'center', gap: 4, flex: 1 },
+  rateLabel: { fontFamily: FontFamily.sans, fontSize: FontSize.label, fontWeight: '600', color: Colors.text, textAlign: 'center' },
 
   // Note
   noteInput: {
@@ -480,7 +465,7 @@ const s = StyleSheet.create({
   footer:           { padding: Spacing.lg, paddingTop: Spacing.sm, gap: Spacing.sm },
   primaryBtn:       { height: 54, borderRadius: Radius.button, backgroundColor: Colors.pain, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   primaryBtnLabel:  { fontFamily: FontFamily.sans, fontSize: FontSize.bodyLarge, fontWeight: '600', color: '#fff' },
-  secondaryBtn:     { height: 46, borderRadius: Radius.button, borderWidth: 2, borderColor: Colors.med, alignItems: 'center', justifyContent: 'center' },
-  secondaryBtnLabel:{ fontFamily: FontFamily.sans, fontSize: FontSize.body, fontWeight: '600', color: Colors.med },
+  secondaryBtn:     { height: 54, borderRadius: Radius.button, borderWidth: 2, borderColor: Colors.med, alignItems: 'center', justifyContent: 'center' },
+  secondaryBtnLabel:{ fontFamily: FontFamily.sans, fontSize: FontSize.bodyLarge, fontWeight: '600', color: Colors.med },
   btnDisabled:      { opacity: 0.4 },
 });

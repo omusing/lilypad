@@ -71,3 +71,14 @@ export async function getMedication(id: number): Promise<Medication | null> {
   );
   return row ? rowToMedication(row) : null;
 }
+
+export async function getActiveMedicationByName(name: string): Promise<Medication | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const db = await getDb();
+  const row = await db.getFirstAsync<MedicationRow>(
+    `SELECT * FROM medications WHERE is_active = 1 AND LOWER(name) = LOWER(?) LIMIT 1`,
+    [trimmed]
+  );
+  return row ? rowToMedication(row) : null;
+}

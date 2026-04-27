@@ -13,7 +13,7 @@ The app has two visual registers that must never bleed into each other:
 
 - **Ground** — backgrounds, cards, chrome, tab bar. Always muted. Reduces fatigue
   for a user tracking something unpleasant day after day.
-- **Signal** — pain ramp, glyph colors, sparkline dots, history badges. Signal
+- **Signal** — pain ramp, glyph colors, sparkline dots, history rate chips. Signal
   carries chroma. When a user sees warm color, it means pain data. That categorical
   clarity is the app's most important perceptual contract.
 
@@ -77,7 +77,7 @@ toastText:       '#F5FAF6'
 ### Pain scale gradient (0–10)
 
 Chroma lifted ~15% from the original spec. Level 10 ends in a true clinical red,
-not muted brick rose. Used on pain selector badges, history row badges, sparkline dots.
+not muted brick rose. Used on pain selector rate chips, history row rate chips, sparkline dots.
 
 | Level | Background | Text | Label |
 |---|---|---|---|
@@ -96,7 +96,7 @@ not muted brick rose. Used on pain selector badges, history row badges, sparklin
 ### Mood scale (1–5)
 
 Red (bad) → green (good). Replaces the original cool-gray axis with a clinically
-intuitive mapping: any red badge = bad, any green badge = good, across all scales.
+intuitive mapping: any red rate chip = bad, any green rate chip = good, across all scales.
 
 | Level | Background | Text | Label |
 |---|---|---|---|
@@ -144,11 +144,11 @@ Both loaded via `expo-font` at app startup.
 |---|---|---|---|
 | `greeting` | 30px | 600 | "Hello, Sarah" home screen greeting |
 | `sectionHeading` | 24px | 700 | Wizard step headings |
-| `bodyLarge` | 17px | 500 | Primary body copy, list labels |
-| `body` | 15px | 500 | Secondary body, activity rows |
-| `bodySmall` | 13px | 400–500 | Timestamps, subtitles |
-| `label` | 11px | 700 | ALLCAPS section labels (letter-spacing 1px) |
-| `tabLabel` | 11px | 500–600 | Tab bar labels |
+| `bodyLarge` | 17px | 600 | Primary labels: medication names, pain card regions, list primary text |
+| `body` | 15px | 500 | Secondary body: dose/route lines, activity rows, card subtitles |
+| `bodySmall` | 14px | 400 | Timestamps, status lines ("1 dose today", "Last: Apr 14") — minimum readable size |
+| `label` | 13px | 600 | Section labels (sentence case, `text` color, no letter-spacing, no ALL CAPS) |
+| `tabLabel` | 12px | 500 | Tab bar labels |
 
 ---
 
@@ -180,7 +180,7 @@ Minimum **48px** height on all interactive elements. Primary action buttons are
 | `card` | 20px | All widget cards |
 | `button` | 28px | Primary action buttons (pill shape) |
 | `chip` | 12px | Selection chips (regions, triggers, qualities) |
-| `badge` | 10px | Pain/mood/sleep badges in list rows |
+| `rateChip` | 10px | Pain/mood/sleep rate chips in list rows and selectors |
 
 ---
 
@@ -203,17 +203,18 @@ cardSoft: '0 2px 8px rgba(26,122,78,0.06)'
 - Log Pain: `pain` background, white label + waveform icon
 - Log Medication: `med` background, white label + capsule icon
 - Icon above label, centered
+- Label font: `bodyLarge` (17px, weight 600)
 
-### Badge (universal — pain / mood / sleep)
+### Rate chip (universal — pain / mood / sleep)
 
-One shell, three payloads. A user who learns the pain badge has learned mood and sleep.
+One shell, three payloads. A user who learns the pain rate chip has learned mood and sleep.
 
 - **Size:** 34×34px in list/history rows; 50×50px in wizard selection rows
-- **Shape:** 10px border-radius rounded square
-- **Pain badge:** numeral centered, color from pain ramp above
-- **Mood badge:** smiley-face glyph (see Glyph system below), color from mood ramp
-- **Sleep badge:** sleepy-face glyph (see Glyph system below), color from sleep ramp
-- **Selected state:** 3px ring in category ring color (`painRing` or `medRing`)
+- **Shape:** 10px border-radius (`rateChip` token) rounded square
+- **Pain rate chip:** numeral centered, color from pain ramp above
+- **Mood rate chip:** smiley-face glyph (see Glyph system below), color from mood ramp
+- **Sleep rate chip:** sleepy-face glyph (see Glyph system below), color from sleep ramp
+- **Selected state:** 3px solid border, color = the chip's own ramp background darkened by ~20% (each ramp level defines its own selection border — not a shared token). Render a 3px transparent border on all unselected chips at all times so layout is stable and no content shifts on selection. No padding increase. The scale animation (see Motion) applies via transform on the chip element only — the surrounding container does not resize.
 
 ### Glyph system (mood + sleep)
 
@@ -221,21 +222,21 @@ Unicode emoji are replaced by a custom glyph family. See `decisions/007-visual-l
 
 **Mood glyphs (1–5):** Full smiley face — circle outline, dot eyes, expressive brows
 (angled down for 1–2, neutral for 3, lifted for 4–5), mouth curve (deep frown → flat
-→ broad smile). Rendered at 28px inside the 50×50 wizard badge; 22px inside the 34×34
-history badge.
+→ broad smile). Rendered at 28px inside the 50×50 wizard rate chip; 22px inside the
+34×34 history rate chip.
 
 **Sleep glyphs (1–5):** Same face family. Closed eyes for levels 3–5 (drowsy/rested),
 open distressed eyes for 1–2. Small "z" in the top-right corner distinguishes sleep
 from mood at a glance.
 
-Both glyph colors use their badge's `fg` value (white on dark, dark on mid-tone).
+Both glyph colors use their rate chip's `fg` value (white on dark, dark on mid-tone).
 
 ### Pain selector (wizard step 1)
 
 - Vertical list, 11 rows (0–10)
 - Row height: 48px (full-width tap target)
-- Left: colored badge (34×34px, radius 10px) with numeral — per ramp above
-- Right: description label (bodyLarge)
+- Left: pain rate chip (34×34px, `rateChip` radius 10px) with numeral — per ramp above
+- Right: description label (`bodyLarge`)
 - Selected: row background tinted `painLight`, label bold, checkmark right
 - Next disabled until a selection is made
 - Do not show "0 = no pain / 10 = worst imaginable" header text — each row already labels 0 and 10
@@ -269,7 +270,7 @@ should be validated in prototype testing on iPhone SE (smallest supported device
 - Background: `card`
 - Shadow: card shadow
 - Border-radius: 20px
-- Section label: 11px, 700 weight, uppercase, `textSecondary`, letter-spacing 1px
+- Section label: `label` token (13px, 600 weight, sentence case, `text` color)
 - Content padding: 16px
 
 ### Wizard visual identity
@@ -286,6 +287,10 @@ and primary action button.
 **Note:** Painting only the header in `painLight` while leaving the body in `bg`
 (green) creates a harsh collision at the boundary. Full-background identity resolves
 this and reinforces the categorical split.
+
+**Wizard button typography:** `bodyLarge` (17px, weight 600), white text. All wizard
+action buttons (primary and secondary/outline) use this size - do not use a smaller
+token.
 
 ### Filled pill (tappable value display)
 
@@ -312,6 +317,15 @@ Used for settings values that are readable and tappable (e.g. reminder time).
 - Positioned above tab bar — never overlaps any button
 - Never green — `med` green is a categorical action color; a green toast would be
   misread as medication-related
+
+### Close / dismiss button
+
+Applies to all modals, bottom sheets, and wizard overlays (Log Medication, Add Medication, any future sheet).
+
+- **Position: top-left, always.** Never top-right.
+- Icon: "X" or chevron-left, 24px, `textSecondary` color
+- Touch target: 44x44px minimum
+- Consistent across every surface in the app - no exceptions
 
 ### UI copy rules
 
@@ -351,5 +365,7 @@ V1 is light mode only. Deferred. Do not add dark mode variants to `constants/the
 Minimal. Interaction feedback only.
 
 - Button press: `scale(0.97)` + slight brightness reduction, 80ms ease
-- Badge/row select: badge `scale(1.12)`, 120ms ease
+- Rate chip select: `scale(1.08)` transform on the chip element only, 120ms ease.
+  The chip's container does not resize — use `transform` not layout properties so
+  surrounding content never shifts.
 - No spring physics, no particle effects, no confetti

@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   medBtn:  { backgroundColor: Colors.med },
   actionLabel: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.body,
+    fontSize: FontSize.bodyLarge,
     fontWeight: '600',
     color: '#fff',
   },
@@ -373,9 +373,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.sans,
     fontSize: FontSize.label,
     fontWeight: '600',
-    color: Colors.textSecondary,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    color: Colors.text,
     marginBottom: 12,
   },
 

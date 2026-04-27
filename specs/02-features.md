@@ -102,9 +102,12 @@ newest first. This is the primary surface for reviewing history. See
 
 **Pain cards (left column):**
 - Right border in the pain ramp color for that entry's score
-- Pain level badge (34×34, ramp color) + time
-- Top regions label
-- Optional note excerpt
+- Top row: pain rate chip (34×34, ramp color) on the left; region / quality
+  description to the right of the chip, top-aligned
+- Bottom row: time anchored bottom-right — visually meeting the time on the
+  adjacent medication card across the vertical rule, creating a shared time axis
+- Optional note excerpt below the top row
+- No layout shift between selected and unselected states
 
 **Medication cards (right column):**
 - Left border in `med` green
@@ -158,7 +161,9 @@ is handled exclusively through the Log Medication wizard — not from this scree
 
 **Adding a new medication:**
 "Add Medication" button (labelled, not a "+" icon) in the screen header. Opens the
-Add Medication sheet.
+Add Medication sheet. On save, if an active medication with the same name already
+exists, the user is prompted to replace (archive the old, insert the new), keep both,
+or cancel. See `06-screens.md` — Add Medication sheet for the full duplicate-check flow.
 
 **No "Took it now" button on this screen.** The Medications screen is for list
 management only. Intake is logged via Log Medication (Home CTA or pain wizard exit).

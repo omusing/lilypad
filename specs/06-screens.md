@@ -114,6 +114,7 @@ Reusable bottom sheet. Invoked from:
 
 **Layout:**
 - Sheet handle at top
+- Close ("X") button: **top-left always** (see `04-design-system.md` — Close/dismiss button)
 - Headline: "Add Medication"
 - Fields (scrollable form):
   - Name (text input, required, placeholder: "Medication name") — supports autocomplete (see below)
@@ -123,7 +124,11 @@ Reusable bottom sheet. Invoked from:
   - Route chips (horizontal scroll, appears below Route when catalog entry has multiple routes)
   - Frequency (text input, optional, placeholder: "e.g. as needed, BID")
 - "Save" button (disabled until Name is filled)
-- "Cancel" link or swipe down to dismiss
+- Dismiss via the top-left "X" button or swipe down. No separate "Cancel" text link.
+
+**Form initialization:** All fields must be empty and placeholders visible at the moment
+the sheet becomes visible. Never render stale state from a previous session first and
+then clear it — initialize the form to empty before the sheet animates in, not after.
 
 **Autocomplete behavior:**
 
@@ -153,9 +158,22 @@ the catalog can be entered entirely by free text.
 **Edit flow:** When editing an existing medication, autocomplete is active on the Name
 field. Selecting a new catalog entry replaces the Name and re-pre-fills Dose and Route.
 
-**On save:** insert (or update) `medications` row. `catalog_rxcui` stored if a catalog
-entry was selected; NULL for free-text entries. `is_active = 1`, `created_at` = now.
-Dismiss sheet. Caller receives the saved medication.
+**Duplicate check on save:** Before inserting, check whether an active medication
+(`is_active = 1`) with the same name already exists (case-insensitive). If one is
+found, show a confirmation dialog:
+
+> "You already have [name] in your list. Replace it with this new entry, or keep both?"
+>
+> - **Replace** — archive the existing row (`is_active = 0`) and insert the new one.
+> - **Keep both** — insert the new row without touching the existing one.
+> - **Cancel** — dismiss the dialog and return to the form with all fields intact.
+
+Matching is by name only. Dose or route differences do not suppress the prompt — the
+user decides whether a different strength counts as a duplicate.
+
+**On save (no duplicate, or after duplicate resolved):** insert (or update) `medications`
+row. `catalog_rxcui` stored if a catalog entry was selected; NULL for free-text entries.
+`is_active = 1`, `created_at` = now. Dismiss sheet. Caller receives the saved medication.
 
 **Validation:** Name is the only required field. Blank optional fields saved as NULL.
 
@@ -169,6 +187,7 @@ Multi-dose bottom sheet. Invoked from:
 
 **Layout:**
 - Sheet handle at top
+- Close ("X") button: **top-left always** — consistent with all other sheets and modals in the app (see `04-design-system.md` — Close/dismiss button)
 - Headline: "What Did You Take?"
 - Entire sheet background: `medLight` (#E6F3ED) — medication color identity
 - Medication list: scrollable list of active medications (name + dose per row)
@@ -179,7 +198,7 @@ Multi-dose bottom sheet. Invoked from:
 - Optional note field (shared across all medications in this session)
 - "Log Doses" button (primary, `med` background, disabled until at least one
   medication has quantity ≥ 1)
-- "Cancel" link or swipe down to dismiss
+- Dismiss via the top-left "X" button or swipe down. No separate "Cancel" text link.
 
 **On save:** insert one `medication_doses` row per selected medication, each with
 its recorded `quantity` and the same `taken_at` = precise system timestamp.
@@ -200,10 +219,10 @@ for schema rationale.
    - **"Log Pain"** → launches Pain Check-In Wizard
    - **"Log Medication"** → opens Log Medication sheet
 3. Recent activity summary (below the buttons):
-   - Pain: "Last logged: 3 hours ago" or "No pain logs today"
-   - Medication: "Last taken: Ibuprofen, 2 hours ago" or "No medications logged today"
+   - Pain: "Last logged: 3 hours ago" or "No pain logs today" — `body` (15px/500), `textSecondary`
+   - Medication: "Last taken: Ibuprofen, 2 hours ago" or "No medications logged today" — same token
 4. 14-day sparkline — daily pain log count (or average score if entries exist).
-   Gaps shown for days with no entries.
+   Gaps shown for days with no entries. Section label "Last 14 days": `label` token.
    Tap sparkline → Timeline.
 
 **States:**
@@ -253,8 +272,8 @@ enabled.
 **Headline:** "How is your pain right now?"
 
 **Input:** Numeric 0–10 selector — vertical list of 11 rows.
-- Each row: colored badge (34×34px, pain ramp color per token table) with numeral +
-  description label (e.g. "Moderate")
+- Each row: pain rate chip (34×34px, pain ramp color per token table) with numeral +
+  description label (`bodyLarge`, e.g. "Moderate")
 - Row height: 48px full-width tap target
 - Selected: row background tinted `painLight`, label bold, checkmark right
 - ⚠️ Validate vertical list vs. stepper buttons vs. slider in prototype — vertical
@@ -318,28 +337,35 @@ Stress / Anxiety, Unknown, Weather
 **Headline:** "How are you feeling overall?"
 
 **Mood input:** 1–5 scale, optional.
-- 5 badges in a horizontal row (50×50px each)
-- Each badge: 10px border-radius rounded square, color from mood ramp (red → green),
+- Section label above the row: "Mood" — `label` token (13px, 600, sentence case, `text` color). Not ALL CAPS, not gray.
+- 5 rate chips in a horizontal row (50×50px each)
+- Each rate chip: 10px border-radius rounded square, color from mood ramp (red → green),
   custom smiley-face glyph (see `04-design-system.md` — Glyph system)
 - Brows angle down for levels 1–2, neutral for 3, lifted for 4–5
 - Mouth curves from deep frown (1) → flat (3) → broad smile (5)
-- Selected: 3px ring in `medRing`
-- Label below each badge: "Terrible" (1) through "Great" (5)
+- Selection: 3px transparent border on all unselected chips (reserves space, no layout shift);
+  solid 3px border in that chip's own ramp color darkened ~20% on the selected chip.
+  No padding increase. Scale animation via transform only (see `04-design-system.md` — Motion).
+- Label below each chip ("Terrible" through "Great"): `label` token (13px, 600, sentence case, `text` color)
 
 **Sleep quality input:** 1–5 scale, optional.
-- Same badge row layout directly below mood
+- Section label above the row: "Sleep quality" — same `label` token as above
+- Same rate chip row layout directly below mood (50×50px each)
 - Color from sleep ramp (red → green)
 - Same face family: closed eyes for levels 3–5, open distressed eyes for 1–2
-- Small "z" in top-right corner distinguishes sleep glyphs from mood glyphs
-- Label below each badge: "Terrible" (1) through "Rested" (5)
+- Small "z" in top-right corner of the chip distinguishes sleep glyphs from mood glyphs
+- Same selection border and animation behavior as mood
+- Label below each chip ("Terrible" through "Rested"): `label` token
 
 **Provider note input:** optional.
 - Multi-line text input, placeholder: "Anything your provider should know…"
 - No character limit in V1.
 
 **Two exit actions:**
-- **"Save Pain Log"** — primary button (`pain` background, full width, 54px)
-- **"Save and Log Medication"** — secondary button (`med` border only, full width, 46px)
+- **"Save Pain Log"** — primary button (`pain` background, white text, full width, 54px tall)
+- **"Save and Log Medication"** — secondary button (`med` border, `med` text, transparent background,
+  full width, 54px tall). Same height as primary — the border-only style already creates sufficient
+  visual hierarchy without reducing the touch target.
 
 **On "Save Pain Log":**
 - Write entry to DB: `entry_date` = today (YYYY-MM-DD), `created_at` = precise system
@@ -374,18 +400,24 @@ letter-spacing 1.2px. Format: `─────── APRIL 17 ──────
 
 **Pain card (left):**
 - Right border in the pain ramp color for that entry's score
-- Pain level badge (34×34, ramp color) + time (e.g. "9:14 AM")
-- Top 2–3 regions (truncated with "…" if more)
-- Mood glyph badge (if logged)
-- Note excerpt (first line, if logged)
+- Top area: pain rate chip (34×34, ramp color) left-anchored; region/quality
+  description to the right of the chip, top-aligned (`body`, 15px/500, `text` color).
+  Truncate to 2–3 regions with "…" if more.
+- Bottom area: time (e.g. "9:14 AM") anchored bottom-right (`bodySmall`, 14px, `textSecondary`) —
+  mirrors the time position on the adjacent medication card, creating a unified time
+  axis at the bottom of each row pair
+- Mood rate chip (34×34, if logged) — inline after regions or on a second line
+- Note excerpt (first line, if logged) below the top area (`bodySmall`, `textSecondary`)
 - Tap → Entry Detail (edit mode)
+- No layout shift on any state change
 
 **Medication card (right):**
 - Left border in `med` green
-- Medication name, time
-- Dose line: `{quantity}× {dose}` always (e.g. "2× 300mg", "1× 400mg"). Never computed
-  as a total — quantity and per-unit dose always shown separately so the provider
-  reads exactly what was taken per pill.
+- Medication name: `body` (15px/500), `text` color
+- Dose line: `{quantity}× {dose}` always (e.g. "2× 300mg", "1× 400mg"), `bodySmall`
+  (14px, `textSecondary`). Never computed as a total — quantity and per-unit dose
+  always shown separately so the provider reads exactly what was taken per pill.
+- Time: `bodySmall` (14px, `textSecondary`), bottom of card
 - Tap → Dose Edit screen
 
 **Delete:**
@@ -418,12 +450,12 @@ Used for both viewing/editing existing entries and creating new entries from Tim
   Time = `created_at` — not user-editable.
 
 **Clinical fields (scrollable single screen):**
-- Pain score (required) — same 11-row badge list as wizard step 1
+- Pain score (required) — same 11-row rate chip list as wizard step 1
 - Pain regions — body map (same component as wizard step 2)
 - Pain quality (optional, multi-select chips, alphabetical)
 - Triggers (optional, multi-select chips, alphabetical)
-- Mood (optional, 1–5 glyph badge row — same component as wizard step 4)
-- Sleep quality (optional, 1–5 glyph badge row — same component as wizard step 4)
+- Mood (optional, 1–5 rate chip row — same component as wizard step 4)
+- Sleep quality (optional, 1–5 rate chip row — same component as wizard step 4)
 - Note (optional, multi-line text)
 
 **Save behavior:**
@@ -485,12 +517,18 @@ sheet from Home — not from this screen.
 **Layout:** Scrollable list of active medications as cards.
 
 **Each card:**
-- Medication name (prominent)
-- Dose, route, frequency: "400mg · oral · as needed"
-- Today's dose count: "Taken today: 2 times" (SUM of quantity where `taken_at` is today)
-- Last dose time: "Last taken: 9:42 AM" or "Not taken today"
-- Edit icon button → inline edit of name/dose/route/frequency
-- Archive icon button → confirmation → `is_active = 0`
+- Medication name: `bodyLarge` (17px/600), `text` color
+- Dose, route, frequency: `body` (15px/500), `textSecondary` color.
+  Format: "400mg · oral · as needed"
+- Status line: `bodySmall` (14px/400), `textSecondary` color — never green.
+  Green is a categorical action color; using it here would imply a medication
+  action rather than neutral status information.
+  - If doses logged today: "N dose(s) today"
+  - If no doses today, but logged before: "Last: [date]"
+  - If never logged: "No doses logged yet"
+- Edit icon button (right side) → inline edit of name/dose/route/frequency.
+  "Save" and "Cancel" controls replace the icon while editing.
+- Archive icon button (right side, after edit icon) → confirmation → `is_active = 0`
 
 **No "Took it now" button.** The Medications screen is for list management only.
 Logging intake is done via the Log Medication sheet (Home CTA or pain wizard exit).

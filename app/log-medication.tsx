@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, TextInput,
-  StyleSheet, Animated, KeyboardAvoidingView, Platform,
+  StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -12,39 +12,7 @@ import { getMedications } from '@/db/medications';
 import { logDosesBatch, getLastDoseByMedication } from '@/db/doses';
 import type { Medication } from '@/db/schema';
 import { timeAgo } from '@/lib/time';
-
-// ─── Toast ────────────────────────────────────────────────────────────────────
-
-function Toast({ visible }: { visible: boolean }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.delay(1200),
-        Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-      ]).start();
-    }
-  }, [visible]);
-
-  return (
-    <Animated.View style={[toast.wrap, { opacity }]} pointerEvents="none">
-      <Ionicons name="checkmark-circle" size={18} color="#fff" />
-      <Text style={toast.text}>Doses logged</Text>
-    </Animated.View>
-  );
-}
-
-const toast = StyleSheet.create({
-  wrap: {
-    position: 'absolute', bottom: 40, alignSelf: 'center',
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: Colors.toastBg, paddingHorizontal: 20, paddingVertical: 12,
-    borderRadius: 24,
-  },
-  text: { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.toastText, fontWeight: '600' },
-});
+import { Toast } from '@/components/Toast';
 
 // ─── Stepper ──────────────────────────────────────────────────────────────────
 
@@ -120,7 +88,10 @@ export default function LogMedicationScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const [loaded, setLoaded]             = useState(false);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
+    setCounts({});
+    setNote('');
+    setLoaded(false);
     (async () => {
       const [meds, doseMap] = await Promise.all([
         getMedications(false),
@@ -130,7 +101,7 @@ export default function LogMedicationScreen() {
       setLastDoseMap(doseMap);
       setLoaded(true);
     })();
-  }, []);
+  }, []));
 
   function setCount(medId: number, n: number) {
     setCounts(c => ({ ...c, [medId]: n }));
@@ -154,8 +125,16 @@ export default function LogMedicationScreen() {
     }
   }
 
+  if (!loaded) {
+    return (
+      <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+        <ActivityIndicator color={Colors.textSecondary} style={{ marginTop: Spacing.xl }} />
+      </SafeAreaView>
+    );
+  }
+
   // ── Empty state ──
-  if (loaded && medications.length === 0) {
+  if (medications.length === 0) {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
         <View style={styles.header}>
@@ -191,12 +170,13 @@ export default function LogMedicationScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-        {/* Header */}
+        {/* Header — close button top-left */}
         <View style={styles.header}>
-          <Text style={styles.title}>Log Medication</Text>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.closeBtn}>
-            <Ionicons name="close" size={22} color={Colors.textSecondary} />
+            <Ionicons name="close" size={24} color={Colors.textSecondary} />
           </TouchableOpacity>
+          <Text style={styles.title}>Log Medication</Text>
+          <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView
@@ -273,7 +253,7 @@ export default function LogMedicationScreen() {
           </TouchableOpacity>
         </View>
 
-        <Toast visible={toastVisible} />
+        <Toast visible={toastVisible} message="Doses logged" />
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -290,25 +270,27 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   title: {
+    flex: 1,
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.sectionHeading,
+    fontSize: FontSize.bodyLarge,
+    fontWeight: '600',
     color: Colors.text,
+    textAlign: 'center',
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.card,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadow.card,
+  },
+  headerSpacer: {
+    width: 44,
   },
 
   scroll: {
@@ -320,15 +302,12 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.sans,
     fontSize: FontSize.label,
     fontWeight: '600',
-    color: Colors.textSecondary,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    color: Colors.text,
     marginBottom: Spacing.sm,
   },
   optional: {
     fontWeight: '400',
-    textTransform: 'none',
-    letterSpacing: 0,
+    color: Colors.textSecondary,
   },
 
   // Medication list
@@ -413,7 +392,7 @@ const styles = StyleSheet.create({
   },
   logBtnLabel: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.body,
+    fontSize: FontSize.bodyLarge,
     fontWeight: '600',
     color: '#fff',
   },

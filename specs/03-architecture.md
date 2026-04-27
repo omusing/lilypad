@@ -225,3 +225,74 @@ medicine-list-generator tool.
 - **Notification scheduling:** All notifications are local. Scheduled via
   expo-notifications on Settings save. Re-scheduled on app launch in case OS cleared
   them (common after reboot on Android).
+
+---
+
+## Form State Initialization
+
+### The problem
+
+React Native (via Expo Router) keeps screen components mounted in memory between
+navigations. `useState` initial values are evaluated exactly once - on the component's
+first mount. Re-opening a screen does not remount it, so stale state from the previous
+session persists. An async `useEffect` or `useFocusEffect` that resets state after
+mount creates a visible flicker: the user sees old data for one frame, then the effect
+fires and the form jumps to the correct state.
+
+### Rules
+
+**1. Forms on navigable screens must reset state on every open, not on mount.**
+
+Use `useFocusEffect(useCallback(() => { ... }, []))` instead of `useEffect(..., [])`.
+Inside the callback, reset all form fields to their empty/default values synchronously,
+before any async work begins.
+
+**2. Forms that load data asynchronously must not render until loading is complete.**
+
+Set a `ready` (or `loaded`) flag to `false` at the top of the focus callback, then to
+`true` only after the async work finishes. Gate the form render on that flag - show a
+spinner or nothing until `ready === true`. This prevents the empty-then-populated flicker
+on edit screens.
+
+```tsx
+const [ready, setReady] = useState(false);
+
+useFocusEffect(useCallback(() => {
+  setReady(false);
+  setFormField('');   // reset synchronously
+  loadData().then(d => {
+    setFormField(d.value);
+  }).finally(() => setReady(true));
+}, []));
+
+if (!ready) return <ActivityIndicator />;
+```
+
+**3. Modal sheets driven by a prop must use a `key` to force remount on each open.**
+
+When a modal receives data via props (e.g. `editing: Medication | null`), the `useState`
+initializer that reads from that prop only runs on the first mount - it ignores prop
+changes on subsequent opens. The correct fix is to increment a `key` each time the sheet
+opens, which forces React to unmount the old instance and mount a fresh one with the
+correct prop values.
+
+```tsx
+// In parent:
+const [sheetKey, setSheetKey] = useState(0);
+function openAdd()  { setSheetKey(k => k + 1); setSheetOpen(true); }
+function openEdit(m) { setEditingMed(m); setSheetKey(k => k + 1); setSheetOpen(true); }
+
+<MySheet key={sheetKey} visible={sheetOpen} editing={editingMed} ... />
+```
+
+Do not rely on `onShow` or `onOpen` callbacks to reset state - they fire after the modal
+animation completes, which is too late to prevent the stale flash.
+
+### Screens and their pattern
+
+| Screen | Pattern |
+|--------|---------|
+| `app/log-pain.tsx` | `useFocusEffect` reset + `ready` guard |
+| `app/log-medication.tsx` | `useFocusEffect` reset + `loaded` guard |
+| `app/entry/[id].tsx` | `useFocusEffect` loads into `loading` guard (edit-only, always loads from DB) |
+| `MedSheet` in `medications.tsx` | `key` prop incremented on every open |

@@ -83,9 +83,9 @@ export const FontSize = {
   sectionHeading: 24,
   bodyLarge:      17,
   body:           15,
-  bodySmall:      13,
-  label:          11,
-  tabLabel:       11,
+  bodySmall:      14,
+  label:          13,
+  tabLabel:       12,
 } as const;
 
 export const FontWeight = {
@@ -104,10 +104,10 @@ export const Spacing = {
 } as const;
 
 export const Radius = {
-  card:   20,
-  button: 28,
-  chip:   12,
-  badge:  10,
+  card:     20,
+  button:   28,
+  chip:     12,
+  rateChip: 10,
 } as const;
 
 // Minimum touch target height — meets iOS 44pt and Material 48dp.

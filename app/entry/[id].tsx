@@ -1,89 +1,131 @@
 import { useCallback, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, ActivityIndicator,
+  View, Text, TouchableOpacity, ScrollView, TextInput,
+  StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import {
-  Colors, FontFamily, FontSize, Spacing, Radius, Shadow, PainScale,
+  Colors, FontFamily, FontSize, Spacing, Radius, Shadow,
+  PainScale, MoodScale, SleepScale, TouchTarget,
 } from '@/constants/theme';
-import { getEntry, deleteEntry } from '@/db/entries';
-import { getMedications } from '@/db/medications';
-import { REGIONS } from '@/constants/regions';
+import { getEntry, updateEntry, deleteEntry } from '@/db/entries';
 import { QUALITIES } from '@/constants/qualities';
 import { TRIGGERS } from '@/constants/triggers';
-import type { Entry, Medication } from '@/db/schema';
+import type { Entry } from '@/db/schema';
+import BodyMap from '@/components/BodyMap';
+import { RateChip } from '@/components/RateChip';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── ChipGroup ────────────────────────────────────────────────────────────────
 
-function labelFor(keys: string[], map: { key: string; label: string }[]): string[] {
-  return keys.map(k => map.find(m => m.key === k)?.label ?? k);
-}
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric',
-    hour: 'numeric', minute: '2-digit',
-  });
-}
-
-const MOOD_LABELS  = ['Very low', 'Low', 'Neutral', 'Good', 'Great'];
-const SLEEP_LABELS = ['Very poor', 'Poor', 'Fair', 'Good', 'Great'];
-const MOOD_EMOJI   = ['😞', '😕', '😐', '🙂', '😊'];
-const SLEEP_EMOJI  = ['😩', '😟', '😐', '😌', '😊'];
-
-// ─── Detail row ───────────────────────────────────────────────────────────────
-
-function DetailSection({ label, children }: { label: string; children: React.ReactNode }) {
+function ChipGroup({
+  title, items, value, onChange,
+}: {
+  title: string;
+  items: readonly { key: string; label: string }[];
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  function toggle(key: string) {
+    onChange(value.includes(key) ? value.filter(k => k !== key) : [...value, key]);
+  }
   return (
-    <View style={detail.wrap}>
-      <Text style={detail.label}>{label}</Text>
-      {children}
+    <View style={{ marginBottom: Spacing.md }}>
+      <Text style={s.sectionLabel}>{title}</Text>
+      <View style={s.chipGrid}>
+        {items.map(item => {
+          const on = value.includes(item.key);
+          return (
+            <TouchableOpacity
+              key={item.key}
+              style={[s.chip, on && s.chipOn]}
+              onPress={() => toggle(item.key)}
+              activeOpacity={0.75}
+            >
+              <Text style={[s.chipLabel, on && s.chipLabelOn]}>{item.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
-function ChipList({ items }: { items: string[] }) {
-  if (items.length === 0) return <Text style={detail.none}>—</Text>;
+// ─── RateChipScale ────────────────────────────────────────────────────────────
+
+function RateChipScale({
+  title, scale, type, value, onChange,
+}: {
+  title: string;
+  scale: readonly ({ bg: string; text: string; label: string } | null)[];
+  type: 'mood' | 'sleep';
+  value: number | null;
+  onChange: (v: number) => void;
+}) {
   return (
-    <View style={detail.chips}>
-      {items.map(item => (
-        <View key={item} style={detail.chip}>
-          <Text style={detail.chipText}>{item}</Text>
-        </View>
-      ))}
+    <View style={{ marginBottom: Spacing.md }}>
+      <Text style={s.sectionLabel}>{title}</Text>
+      <View style={s.rateRow}>
+        {[1, 2, 3, 4, 5].map(v => {
+          const entry = scale[v];
+          if (!entry) return null;
+          return (
+            <TouchableOpacity
+              key={v}
+              style={s.rateBtn}
+              onPress={() => onChange(v)}
+              activeOpacity={0.75}
+              accessibilityLabel={entry.label}
+            >
+              <RateChip size={50} scale={entry} payload={type} selected={value === v} />
+              <Text style={s.rateLabel}>{entry.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
-
-const detail = StyleSheet.create({
-  wrap:     { gap: 6 },
-  label:    { fontFamily: FontFamily.sans, fontSize: FontSize.label, fontWeight: '600', color: Colors.textSecondary, letterSpacing: 0.8, textTransform: 'uppercase' },
-  none:     { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.textSecondary },
-  chips:    { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip:     { backgroundColor: Colors.bg, borderRadius: Radius.chip, paddingHorizontal: 10, paddingVertical: 4 },
-  chipText: { fontFamily: FontFamily.sans, fontSize: FontSize.bodySmall, color: Colors.text },
-});
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function EntryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [entry, setEntry]           = useState<Entry | null>(null);
-  const [medications, setMedications] = useState<Medication[]>([]);
-  const [loading, setLoading]       = useState(true);
+  const { width } = useWindowDimensions();
+
+  const [entry, setEntry]             = useState<Entry | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [saving, setSaving]           = useState(false);
+
+  // Edit state — mirrors the fields from log-pain wizard
+  const [entryDate, setEntryDate]     = useState(new Date());
+  const [painLevel, setPainLevel]     = useState<number | null>(null);
+  const [regions, setRegions]         = useState<string[]>([]);
+  const [qualities, setQualities]     = useState<string[]>([]);
+  const [triggers, setTriggers]       = useState<string[]>([]);
+  const [mood, setMood]               = useState<number | null>(null);
+  const [sleep, setSleep]             = useState<number | null>(null);
+  const [note, setNote]               = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   useFocusEffect(useCallback(() => {
     (async () => {
-      const [e, meds] = await Promise.all([
-        getEntry(Number(id)),
-        getMedications(true),
-      ]);
+      const e = await getEntry(Number(id));
       setEntry(e);
-      setMedications(meds);
+      if (e) {
+        setEntryDate(new Date(e.entry_date + 'T12:00:00'));
+        setPainLevel(e.pain_level);
+        setRegions(e.pain_regions);
+        setQualities(e.pain_qualities);
+        setTriggers(e.triggers);
+        setMood(e.mood);
+        setSleep(e.sleep_quality);
+        setNote(e.note ?? '');
+      }
       setLoading(false);
     })();
   }, [id]));
@@ -106,6 +148,28 @@ export default function EntryDetailScreen() {
     );
   }
 
+  async function handleSave() {
+    if (!entry || painLevel === null || regions.length === 0) return;
+    setSaving(true);
+    try {
+      await updateEntry(entry.id, {
+        entry_date:     entryDate.toISOString().slice(0, 10),
+        pain_level:     painLevel,
+        pain_regions:   regions,
+        pain_qualities: qualities,
+        triggers:       triggers,
+        mood:           mood,
+        sleep_quality:  sleep,
+        note:           note.trim() || null,
+      });
+      router.back();
+    } catch {
+      Alert.alert('Couldn\'t save', 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
@@ -118,8 +182,8 @@ export default function EntryDetailScreen() {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.closeBtn}>
-            <Ionicons name="close" size={22} color={Colors.textSecondary} />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.headerBtn}>
+            <Ionicons name="close" size={24} color={Colors.textSecondary} />
           </TouchableOpacity>
         </View>
         <View style={styles.emptyWrap}>
@@ -129,146 +193,173 @@ export default function EntryDetailScreen() {
     );
   }
 
-  const scale         = PainScale[entry.pain_level];
-  const regionLabels  = labelFor(entry.pain_regions,   [...REGIONS]);
-  const qualityLabels = labelFor(entry.pain_qualities,  [...QUALITIES]);
-  const triggerLabels = labelFor(entry.triggers,        [...TRIGGERS]);
-  const medNames      = entry.medication_ids.map(mid =>
-    medications.find(m => m.id === mid)?.name ?? `Medication #${mid}`
-  );
+  const mapWidth = width - Spacing.lg * 2;
+  const canSave  = painLevel !== null && regions.length > 0 && !saving;
+
+  const dateLabel = entryDate.toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+  });
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.closeBtn}>
-          <Ionicons name="close" size={22} color={Colors.textSecondary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Pain Entry</Text>
-        <TouchableOpacity onPress={handleDelete} hitSlop={12} style={styles.deleteBtn}>
-          <Ionicons name="trash-outline" size={20} color={Colors.pain} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Hero: pain score */}
-        <View style={styles.heroCard}>
-          <View style={[styles.painBadge, { backgroundColor: scale.bg }]}>
-            <Text style={[styles.painNumber, { color: scale.text }]}>{entry.pain_level}</Text>
-            <Text style={[styles.painOf10, { color: scale.text }]}>/ 10</Text>
-          </View>
-          <View style={styles.heroMeta}>
-            <Text style={styles.heroDate}>{formatDateTime(entry.created_at)}</Text>
-            {entry.updated_at && (
-              <Text style={styles.heroEdited}>Edited</Text>
-            )}
-          </View>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.headerBtn}>
+            <Ionicons name="close" size={24} color={Colors.textSecondary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Edit Entry</Text>
+          <TouchableOpacity onPress={handleDelete} hitSlop={12} style={styles.headerBtn}>
+            <Ionicons name="trash-outline" size={20} color={Colors.pain} />
+          </TouchableOpacity>
         </View>
 
-        {/* Details card */}
-        <View style={styles.detailCard}>
-          <DetailSection label="Regions">
-            <ChipList items={regionLabels} />
-          </DetailSection>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Date */}
+          <View style={{ marginBottom: Spacing.md }}>
+            <Text style={s.sectionLabel}>Date</Text>
+            <TouchableOpacity
+              style={styles.datePill}
+              onPress={() => setShowDatePicker(v => !v)}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="calendar-outline" size={16} color={Colors.text} />
+              <Text style={styles.datePillLabel}>{dateLabel}</Text>
+            </TouchableOpacity>
+            {showDatePicker && (
+              <DateTimePicker
+                value={entryDate}
+                mode="date"
+                display="inline"
+                maximumDate={new Date()}
+                onChange={(_e, d) => {
+                  setShowDatePicker(false);
+                  if (d) setEntryDate(d);
+                }}
+              />
+            )}
+          </View>
 
-          <View style={styles.divider} />
+          {/* Pain score */}
+          <Text style={s.sectionLabel}>Pain score</Text>
+          <View style={styles.painList}>
+            {Array.from({ length: 11 }, (_, i) => {
+              const selected = painLevel === i;
+              const sc = PainScale[i];
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.painRow, selected && styles.painRowSelected]}
+                  onPress={() => setPainLevel(i)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.painBadge, { backgroundColor: sc.bg }]}>
+                    <Text style={[styles.painNum, { color: sc.text }]}>{i}</Text>
+                  </View>
+                  <Text style={[styles.painRowLabel, selected && { fontWeight: '600' }]}>
+                    {sc.label}
+                  </Text>
+                  {selected && <Ionicons name="checkmark" size={18} color={Colors.pain} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
-          <DetailSection label="Qualities">
-            <ChipList items={qualityLabels} />
-          </DetailSection>
+          {/* Body regions */}
+          <View style={{ marginTop: Spacing.lg, marginBottom: Spacing.md }}>
+            <Text style={s.sectionLabel}>Body regions</Text>
+            <BodyMap selected={regions} onChange={setRegions} displayWidth={mapWidth} />
+          </View>
 
-          <View style={styles.divider} />
+          {/* Qualities + Triggers */}
+          <ChipGroup title="Pain qualities" items={QUALITIES} value={qualities} onChange={setQualities} />
+          <ChipGroup title="Triggers" items={TRIGGERS} value={triggers} onChange={setTriggers} />
 
-          <DetailSection label="Triggers">
-            <ChipList items={triggerLabels} />
-          </DetailSection>
+          {/* Mood + Sleep */}
+          <RateChipScale title="Mood" scale={MoodScale} type="mood" value={mood} onChange={setMood} />
+          <RateChipScale title="Sleep quality" scale={SleepScale} type="sleep" value={sleep} onChange={setSleep} />
+
+          {/* Note */}
+          <Text style={s.sectionLabel}>Note for your provider</Text>
+          <TextInput
+            style={styles.noteInput}
+            placeholder="Anything your provider should know..."
+            placeholderTextColor={Colors.textFaint}
+            value={note}
+            onChangeText={setNote}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
+            onPress={handleSave}
+            disabled={!canSave}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.saveBtnLabel}>{saving ? 'Saving...' : 'Save Changes'}</Text>
+          </TouchableOpacity>
         </View>
-
-        {/* Mood + Sleep */}
-        {(entry.mood !== null || entry.sleep_quality !== null) && (
-          <View style={styles.detailCard}>
-            {entry.mood !== null && (
-              <DetailSection label="Mood">
-                <Text style={styles.emojiRow}>
-                  {MOOD_EMOJI[entry.mood - 1]} {MOOD_LABELS[entry.mood - 1]}
-                </Text>
-              </DetailSection>
-            )}
-            {entry.mood !== null && entry.sleep_quality !== null && (
-              <View style={styles.divider} />
-            )}
-            {entry.sleep_quality !== null && (
-              <DetailSection label="Sleep">
-                <Text style={styles.emojiRow}>
-                  {SLEEP_EMOJI[entry.sleep_quality - 1]} {SLEEP_LABELS[entry.sleep_quality - 1]}
-                </Text>
-              </DetailSection>
-            )}
-          </View>
-        )}
-
-        {/* Medications */}
-        {medNames.length > 0 && (
-          <View style={styles.detailCard}>
-            <DetailSection label="Medications taken">
-              <ChipList items={medNames} />
-            </DetailSection>
-          </View>
-        )}
-
-        {/* Note */}
-        {entry.note ? (
-          <View style={styles.detailCard}>
-            <DetailSection label="Note">
-              <Text style={styles.noteText}>{entry.note}</Text>
-            </DetailSection>
-          </View>
-        ) : null}
-      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Shared section label + chip styles ──────────────────────────────────────
+
+const s = StyleSheet.create({
+  sectionLabel: {
+    fontFamily: FontFamily.sans,
+    fontSize: FontSize.label,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: Spacing.sm,
+  },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  chip: {
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderRadius: Radius.chip, backgroundColor: Colors.card,
+    borderWidth: 1.5, borderColor: Colors.border,
+  },
+  chipOn: { backgroundColor: Colors.painLight, borderColor: Colors.pain },
+  chipLabel: { fontFamily: FontFamily.sans, fontSize: FontSize.bodySmall, color: Colors.text },
+  chipLabelOn: { color: Colors.pain, fontWeight: '600' },
+  rateRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.sm },
+  rateBtn: { alignItems: 'center', gap: 4, flex: 1 },
+  rateLabel: { fontFamily: FontFamily.sans, fontSize: FontSize.label, fontWeight: '600', color: Colors.text, textAlign: 'center' },
+});
+
+// ─── Screen styles ────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-  },
+  root: { flex: 1, backgroundColor: Colors.bg },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   headerTitle: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.body + 1,
-    color: Colors.text,
+    fontSize: FontSize.bodyLarge,
     fontWeight: '600',
+    color: Colors.text,
   },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.card,
-  },
-  deleteBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.painLight,
+  headerBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -276,84 +367,81 @@ const styles = StyleSheet.create({
   scroll: {
     padding: Spacing.lg,
     paddingBottom: Spacing.xl,
-    gap: Spacing.md,
   },
 
-  // Hero
-  heroCard: {
-    backgroundColor: Colors.card,
-    borderRadius: Radius.card,
-    padding: Spacing.lg,
+  datePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.lg,
-    ...Shadow.card,
+    gap: Spacing.xs,
+    backgroundColor: Colors.card,
+    borderRadius: Radius.button,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    alignSelf: 'flex-start',
+    ...Shadow.cardSoft,
   },
-  painBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  painNumber: {
-    fontFamily: FontFamily.sans,
-    fontSize: 32,
-    fontWeight: '600',
-    lineHeight: 36,
-  },
-  painOf10: {
-    fontFamily: FontFamily.sans,
-    fontSize: FontSize.label,
-  },
-  heroMeta: {
-    flex: 1,
-    gap: 4,
-  },
-  heroDate: {
+  datePillLabel: {
     fontFamily: FontFamily.sans,
     fontSize: FontSize.body,
-    color: Colors.text,
     fontWeight: '500',
-  },
-  heroEdited: {
-    fontFamily: FontFamily.sans,
-    fontSize: FontSize.label,
-    color: Colors.textSecondary,
-    fontStyle: 'italic',
+    color: Colors.text,
   },
 
-  // Detail card
-  detailCard: {
+  painList: {
+    backgroundColor: Colors.card,
+    borderRadius: Radius.card,
+    overflow: 'hidden',
+    marginBottom: Spacing.md,
+  },
+  painRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 16,
+    height: TouchTarget.min,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  painRowSelected: { backgroundColor: Colors.painLight },
+  painBadge: {
+    width: 34, height: 34,
+    borderRadius: Radius.rateChip,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  painNum: { fontFamily: FontFamily.sans, fontSize: 15, fontWeight: '700' },
+  painRowLabel: { flex: 1, fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.text },
+
+  noteInput: {
     backgroundColor: Colors.card,
     borderRadius: Radius.card,
     padding: Spacing.md,
-    gap: Spacing.md,
-    ...Shadow.card,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  emojiRow: {
     fontFamily: FontFamily.sans,
     fontSize: FontSize.body,
     color: Colors.text,
-  },
-  noteText: {
-    fontFamily: FontFamily.sans,
-    fontSize: FontSize.body,
-    color: Colors.text,
-    lineHeight: FontSize.body * 1.6,
+    minHeight: 100,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    textAlignVertical: 'top',
+    marginTop: Spacing.sm,
   },
 
-  // Empty / not found
-  emptyWrap: {
-    flex: 1,
+  footer: { padding: Spacing.lg, paddingTop: Spacing.sm },
+  saveBtn: {
+    height: 54,
+    borderRadius: Radius.button,
+    backgroundColor: Colors.pain,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  saveBtnDisabled: { opacity: 0.4 },
+  saveBtnLabel: {
+    fontFamily: FontFamily.sans,
+    fontSize: FontSize.bodyLarge,
+    fontWeight: '600',
+    color: '#fff',
+  },
+
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: {
     fontFamily: FontFamily.sans,
     fontSize: FontSize.sectionHeading,

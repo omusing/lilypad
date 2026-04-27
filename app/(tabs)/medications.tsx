@@ -12,7 +12,7 @@ import {
 } from '@/constants/theme';
 import {
   getMedications, insertMedication, updateMedication,
-  archiveMedication, unarchiveMedication,
+  archiveMedication, unarchiveMedication, getActiveMedicationByName,
 } from '@/db/medications';
 import { getTodayDoseCountByMedication, getLastDoseByMedication } from '@/db/doses';
 import type { Medication } from '@/db/schema';
@@ -43,14 +43,16 @@ interface SheetProps {
 }
 
 function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
-  const [form, setForm]               = useState<FormData>(EMPTY_FORM);
+  const [form, setForm]               = useState<FormData>(editing
+    ? { name: editing.name, dose: editing.dose ?? '', route: editing.route ?? '', frequency: editing.frequency ?? '' }
+    : EMPTY_FORM);
   const [saving, setSaving]           = useState(false);
   const [nameError, setNameError]     = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestionResult[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<SuggestionResult | null>(null);
   const indexRef = useRef<ReturnType<typeof buildSearchIndex> | null>(null);
 
-  // Build search index and reset state on modal open
+  // Synchronously reset form on every open so there is never stale data visible on first render
   const handleOpen = useCallback(() => {
     setForm(
       editing
@@ -62,6 +64,11 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
     setSelectedEntry(null);
     indexRef.current = buildSearchIndex();
   }, [editing]);
+
+  async function doInsert(payload: Parameters<typeof insertMedication>[0]) {
+    await insertMedication(payload);
+    onSaved();
+  }
 
   async function handleSave() {
     if (!form.name.trim()) { setNameError(true); return; }
@@ -79,10 +86,42 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
           name: payload.name, dose: payload.dose, route: payload.route, frequency: payload.frequency,
           ...(selectedEntry ? { catalog_rxcui: selectedEntry.entry.rxcui } : {}),
         });
+        onSaved();
       } else {
-        await insertMedication(payload);
+        // Duplicate check — only on add
+        const existing = await getActiveMedicationByName(payload.name);
+        if (existing) {
+          setSaving(false);
+          Alert.alert(
+            'Medication already exists',
+            `"${existing.name}" is already in your active list.`,
+            [
+              {
+                text: 'Replace',
+                style: 'destructive',
+                onPress: async () => {
+                  setSaving(true);
+                  try {
+                    await archiveMedication(existing.id);
+                    await doInsert(payload);
+                  } finally { setSaving(false); }
+                },
+              },
+              {
+                text: 'Keep Both',
+                onPress: async () => {
+                  setSaving(true);
+                  try { await doInsert(payload); }
+                  finally { setSaving(false); }
+                },
+              },
+              { text: 'Cancel', style: 'cancel' },
+            ]
+          );
+          return;
+        }
+        await doInsert(payload);
       }
-      onSaved();
     } finally {
       setSaving(false);
     }
@@ -125,13 +164,13 @@ function MedSheet({ visible, editing, onClose, onSaved }: SheetProps) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <SafeAreaView style={sheet.root} edges={['top', 'bottom']}>
-          {/* Header */}
+          {/* Header — X close button top-left */}
           <View style={sheet.header}>
-            <TouchableOpacity onPress={onClose} hitSlop={12}>
-              <Text style={sheet.cancel}>Cancel</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={12} style={sheet.closeBtn}>
+              <Ionicons name="close" size={24} color={Colors.textSecondary} />
             </TouchableOpacity>
             <Text style={sheet.title}>{editing ? 'Edit Medication' : 'Add Medication'}</Text>
-            <TouchableOpacity onPress={handleSave} hitSlop={12} disabled={saving}>
+            <TouchableOpacity onPress={handleSave} hitSlop={12} disabled={saving} style={sheet.saveBtn}>
               <Text style={[sheet.save, saving && { opacity: 0.5 }]}>
                 {saving ? 'Saving...' : 'Save'}
               </Text>
@@ -275,18 +314,19 @@ const sheet = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  title:     { fontFamily: FontFamily.sans, fontSize: FontSize.body + 1, color: Colors.text, fontWeight: '600' },
-  cancel:    { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.textSecondary },
+  closeBtn:  { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  saveBtn:   { minWidth: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center', paddingRight: Spacing.xs },
+  title:     { fontFamily: FontFamily.sans, fontSize: FontSize.bodyLarge, color: Colors.text, fontWeight: '600', flex: 1, textAlign: 'center' },
   save:      { fontFamily: FontFamily.sans, fontSize: FontSize.body, color: Colors.med, fontWeight: '600' },
   scroll:    { padding: Spacing.lg, paddingBottom: Spacing.xl },
-  label:     { fontFamily: FontFamily.sans, fontSize: FontSize.label, fontWeight: '600', color: Colors.textSecondary, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: Spacing.xs },
+  label:     { fontFamily: FontFamily.sans, fontSize: FontSize.label, fontWeight: '600', color: Colors.text, marginBottom: Spacing.xs },
   required:  { color: Colors.pain },
-  optional:  { fontWeight: '400', textTransform: 'none', letterSpacing: 0, color: Colors.textSecondary },
+  optional:  { fontWeight: '400', color: Colors.textSecondary },
   input: {
     backgroundColor: Colors.card,
     borderRadius: Radius.card,
@@ -344,6 +384,7 @@ export default function MedicationsScreen() {
   // Sheet state
   const [sheetOpen,   setSheetOpen]   = useState(false);
   const [editingMed,  setEditingMed]  = useState<Medication | null>(null);
+  const [sheetKey,    setSheetKey]    = useState(0);
 
   async function load() {
     const [all, todayCounts, lastDoses] = await Promise.all([
@@ -360,8 +401,8 @@ export default function MedicationsScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, []));
 
-  function openAdd()               { setEditingMed(null);  setSheetOpen(true); }
-  function openEdit(m: Medication) { setEditingMed(m);     setSheetOpen(true); }
+  function openAdd()               { setEditingMed(null);  setSheetKey(k => k + 1); setSheetOpen(true); }
+  function openEdit(m: Medication) { setEditingMed(m);     setSheetKey(k => k + 1); setSheetOpen(true); }
   function closeSheet()            { setSheetOpen(false); }
   function handleSaved()           { setSheetOpen(false); load(); }
 
@@ -396,7 +437,7 @@ export default function MedicationsScreen() {
       <View style={styles.headerRow}>
         <Text style={styles.heading}>Medications</Text>
         <TouchableOpacity style={styles.addBtn} onPress={openAdd} hitSlop={8}>
-          <Ionicons name="add" size={22} color="#fff" />
+          <Text style={styles.addBtnLabel}>Add Medication</Text>
         </TouchableOpacity>
       </View>
 
@@ -424,11 +465,7 @@ export default function MedicationsScreen() {
                 const isLast     = i === active.length - 1;
                 return (
                   <View key={med.id} style={[styles.row, !isLast && styles.rowBorder]}>
-                    <TouchableOpacity
-                      style={styles.rowMain}
-                      onPress={() => openEdit(med)}
-                      activeOpacity={0.7}
-                    >
+                    <View style={styles.rowMain}>
                       <View style={styles.medDot} />
                       <View style={styles.medInfo}>
                         <Text style={styles.medName}>{med.name}</Text>
@@ -445,9 +482,16 @@ export default function MedicationsScreen() {
                               : 'No doses logged yet'}
                         </Text>
                       </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.iconBtn}
+                      onPress={() => openEdit(med)}
+                      hitSlop={8}
+                    >
+                      <Ionicons name="pencil-outline" size={18} color={Colors.textSecondary} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.archiveBtn}
+                      style={styles.iconBtn}
                       onPress={() => confirmArchive(med)}
                       hitSlop={8}
                     >
@@ -511,6 +555,7 @@ export default function MedicationsScreen() {
       )}
 
       <MedSheet
+        key={sheetKey}
         visible={sheetOpen}
         editing={editingMed}
         onClose={closeSheet}
@@ -542,13 +587,19 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    height: 36,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Radius.button,
     backgroundColor: Colors.med,
     alignItems: 'center',
     justifyContent: 'center',
     ...Shadow.card,
+  },
+  addBtnLabel: {
+    fontFamily: FontFamily.sans,
+    fontSize: FontSize.bodySmall,
+    fontWeight: '600',
+    color: '#fff',
   },
 
   scroll: {
@@ -596,22 +647,24 @@ const styles = StyleSheet.create({
   },
   medName: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.body,
+    fontSize: FontSize.bodyLarge,
     color: Colors.text,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   medMeta: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.bodySmall,
+    fontSize: FontSize.body,
+    fontWeight: '500',
     color: Colors.textSecondary,
   },
   medStatus: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.label,
-    color: Colors.med,
+    fontSize: FontSize.bodySmall,
+    fontWeight: '400',
+    color: Colors.textSecondary,
     marginTop: 2,
   },
-  archiveBtn: {
+  iconBtn: {
     width: TouchTarget.min,
     height: TouchTarget.min,
     alignItems: 'center',

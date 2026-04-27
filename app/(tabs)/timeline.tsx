@@ -38,7 +38,7 @@ interface DayBucket {
 
 function formatDividerDate(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }).toUpperCase();
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 }
 
 function formatTime(iso: string): string {
@@ -101,18 +101,24 @@ function PainCard({ entry, onDelete }: { entry: Entry; onDelete: (id: number) =>
       onLongPress={confirmDelete}
       activeOpacity={0.75}
     >
-      <View style={styles.cardTopRow}>
+      {/* Top area: rate chip left, regions to its right top-aligned */}
+      <View style={styles.cardTopArea}>
         <View style={[styles.painBadge, { backgroundColor: scale.bg }]}>
           <Text style={[styles.painNum, { color: scale.text }]}>{entry.pain_level}</Text>
         </View>
+        <View style={styles.cardTopRight}>
+          {regions ? (
+            <Text style={styles.regionsText} numberOfLines={2}>{regions}</Text>
+          ) : null}
+          {entry.note ? (
+            <Text style={styles.noteExcerpt} numberOfLines={1}>{entry.note}</Text>
+          ) : null}
+        </View>
+      </View>
+      {/* Bottom area: time anchored bottom-right */}
+      <View style={styles.cardBottomRow}>
         <Text style={styles.timeText}>{formatTime(entry.created_at)}</Text>
       </View>
-      {regions ? (
-        <Text style={styles.regionsText} numberOfLines={2}>{regions}</Text>
-      ) : null}
-      {entry.note ? (
-        <Text style={styles.noteExcerpt} numberOfLines={1}>{entry.note}</Text>
-      ) : null}
     </TouchableOpacity>
   );
 }
@@ -134,7 +140,10 @@ function MedCard({ dose }: { dose: DoseEvent }) {
       {doseLabel ? (
         <Text style={styles.medDose} numberOfLines={1}>{doseLabel}</Text>
       ) : null}
-      <Text style={styles.timeText}>{formatTime(dose.taken_at)}</Text>
+      {/* Time anchored to bottom to visually align with pain card time */}
+      <View style={styles.cardBottomRow}>
+        <Text style={styles.timeText}>{formatTime(dose.taken_at)}</Text>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -274,9 +283,8 @@ const styles = StyleSheet.create({
   dividerText: {
     fontFamily: FontFamily.sans,
     fontSize: FontSize.label,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-    letterSpacing: 1.2,
+    fontWeight: '600',
+    color: Colors.text,
   },
 
   // Two-column layout
@@ -301,22 +309,29 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderRadius: Radius.card,
     padding: Spacing.sm,
-    gap: 4,
     ...Shadow.card,
     // right border added inline per pain level
   },
-  cardTopRow: {
+  cardTopArea: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     gap: Spacing.xs,
+  },
+  cardTopRight: {
+    flex: 1,
+    gap: 2,
+  },
+  cardBottomRow: {
+    alignItems: 'flex-end',
+    marginTop: 4,
   },
   painBadge: {
     width: 34,
     height: 34,
-    borderRadius: Radius.badge,
+    borderRadius: Radius.rateChip,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   painNum: {
     fontFamily: FontFamily.sans,
@@ -325,13 +340,13 @@ const styles = StyleSheet.create({
   },
   regionsText: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.label,
-    color: Colors.text,
+    fontSize: FontSize.body,
     fontWeight: '500',
+    color: Colors.text,
   },
   noteExcerpt: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.label,
+    fontSize: FontSize.bodySmall,
     color: Colors.textSecondary,
     fontStyle: 'italic',
   },
@@ -341,26 +356,25 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card,
     borderRadius: Radius.card,
     padding: Spacing.sm,
-    gap: 2,
     borderLeftWidth: 4,
     borderLeftColor: Colors.med,
     ...Shadow.card,
   },
   medName: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.label,
+    fontSize: FontSize.body,
+    fontWeight: '500',
     color: Colors.text,
-    fontWeight: '600',
   },
   medDose: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.label,
-    color: Colors.med,
+    fontSize: FontSize.bodySmall,
+    color: Colors.textSecondary,
   },
 
   timeText: {
     fontFamily: FontFamily.sans,
-    fontSize: FontSize.label,
+    fontSize: FontSize.bodySmall,
     color: Colors.textSecondary,
   },
 

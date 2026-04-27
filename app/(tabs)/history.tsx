@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   painBadge: {
     width: 44,
     height: 44,
-    borderRadius: Radius.badge,
+    borderRadius: Radius.rateChip,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   },
   badge: {
     backgroundColor: Colors.bg,
-    borderRadius: Radius.badge,
+    borderRadius: Radius.rateChip,
     paddingHorizontal: 6,
     paddingVertical: 2,
     flexDirection: 'row',
