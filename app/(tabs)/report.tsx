@@ -1,10 +1,12 @@
-import { useCallback, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, ActivityIndicator, Dimensions,
+  TouchableOpacity, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import Svg, { Rect, Text as SvgText } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 
 import {
   Colors, FontFamily, FontSize, Spacing, Radius, Shadow, PainScale,
@@ -13,22 +15,21 @@ import { getEntriesInRange } from '@/db/entries';
 import { getDoseCountsInRange } from '@/db/doses';
 import { getMedications } from '@/db/medications';
 import { REGIONS } from '@/constants/regions';
-import type { Entry, Medication } from '@/db/schema';
+import { exportPdf } from '@/lib/pdf';
+import type { Entry } from '@/db/schema';
+
+const REPORT_DAYS = 30;
 
 // ─── Data crunching ───────────────────────────────────────────────────────────
 
 interface ReportData {
   entries:       Entry[];
   avgPain:       number | null;
-  highPainDays:  number;        // days with avg pain >= 7
+  highPainDays:  number;
   totalEntries:  number;
   regionCounts:  { key: string; label: string; count: number }[];
-  weeklyAvgs:    { week: string; avg: number | null }[];   // 4 weeks
+  weeklyAvgs:    { week: string; avg: number | null }[];
   medDoseCounts: { name: string; count: number }[];
-}
-
-function toDate(iso: string): string {
-  return iso.slice(0, 10);
 }
 
 function weeksAgo(n: number): string {
@@ -37,9 +38,9 @@ function weeksAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-async function loadReport(days: number): Promise<ReportData> {
+async function loadReport(): Promise<ReportData> {
   const today    = new Date().toISOString().slice(0, 10);
-  const fromDate = new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  const fromDate = new Date(Date.now() - (REPORT_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
 
   const [entries, meds, doseCounts] = await Promise.all([
     getEntriesInRange(fromDate, today),
@@ -52,7 +53,6 @@ async function loadReport(days: number): Promise<ReportData> {
     ? Math.round((allLevels.reduce((a, b) => a + b, 0) / allLevels.length) * 10) / 10
     : null;
 
-  // High pain days: group by date, avg per day >= 7
   const byDate: Record<string, number[]> = {};
   for (const e of entries) {
     (byDate[e.entry_date] ??= []).push(e.pain_level);
@@ -61,7 +61,6 @@ async function loadReport(days: number): Promise<ReportData> {
     vals => vals.reduce((a, b) => a + b, 0) / vals.length >= 7
   ).length;
 
-  // Region frequency
   const regionMap: Record<string, number> = {};
   for (const e of entries) {
     for (const r of e.pain_regions) {
@@ -73,7 +72,6 @@ async function loadReport(days: number): Promise<ReportData> {
     .filter(r => r.count > 0)
     .sort((a, b) => b.count - a.count);
 
-  // Weekly averages (4 weeks, most recent last)
   const weeklyAvgs = [3, 2, 1, 0].map(weeksBack => {
     const start = weeksAgo(weeksBack + 1);
     const end   = weeksAgo(weeksBack);
@@ -86,7 +84,6 @@ async function loadReport(days: number): Promise<ReportData> {
     };
   });
 
-  // Medication dose counts
   const medDoseCounts = meds
     .map(m => ({ name: m.name, count: doseCounts[m.id] ?? 0 }))
     .filter(m => m.count > 0)
@@ -109,15 +106,14 @@ function WeeklyBars({ data }: { data: { week: string; avg: number | null }[] }) 
   const width  = Dimensions.get('window').width - 48 - 32;
   const height = 80;
   const barW   = Math.floor((width - 32) / data.length) - 8;
-  const maxVal = 10;
 
   return (
     <Svg width={width} height={height + 24}>
       {data.map((d, i) => {
-        const x   = 16 + i * ((width - 32) / data.length);
-        const pct = d.avg !== null ? d.avg / maxVal : 0;
-        const bh  = Math.max(pct * height, d.avg !== null ? 4 : 0);
-        const by  = height - bh;
+        const x     = 16 + i * ((width - 32) / data.length);
+        const pct   = d.avg !== null ? d.avg / 10 : 0;
+        const bh    = Math.max(pct * height, d.avg !== null ? 4 : 0);
+        const by    = height - bh;
         const level = d.avg !== null ? Math.round(d.avg) : 0;
         const color = d.avg !== null ? PainScale[level].bg : Colors.border;
 
@@ -153,21 +149,52 @@ function WeeklyBars({ data }: { data: { week: string; avg: number | null }[] }) 
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-import React from 'react';
-
 export default function ReportScreen() {
-  const [report, setReport] = useState<ReportData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [report,    setReport]    = useState<ReportData | null>(null);
+  const [loading,   setLoading]   = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   useFocusEffect(useCallback(() => {
-    loadReport(30).then(r => { setReport(r); setLoading(false); });
+    setLoading(true);
+    loadReport().then(r => { setReport(r); setLoading(false); });
   }, []));
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportPdf(REPORT_DAYS);
+    } catch (err) {
+      Alert.alert('Export failed', 'Could not generate the PDF. Please try again.');
+      console.error(err);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const canExport = !loading && !!report && report.totalEntries > 0 && !exporting;
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.headerRow}>
-        <Text style={styles.heading}>Report</Text>
-        <Text style={styles.period}>Last 30 days</Text>
+        <View>
+          <Text style={styles.heading}>Report</Text>
+          <Text style={styles.period}>Last 30 days</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.exportBtn, !canExport && styles.exportBtnDisabled]}
+          onPress={handleExport}
+          disabled={!canExport}
+          activeOpacity={0.8}
+        >
+          {exporting ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="share-outline" size={15} color="#fff" />
+              <Text style={styles.exportLabel}>Export PDF</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
 
       {loading || !report ? (
@@ -179,11 +206,10 @@ export default function ReportScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Stats row */}
           <View style={styles.statsRow}>
             <View style={[styles.statCard, styles.statCardFlex]}>
               <Text style={styles.statNumber}>
-                {report.avgPain !== null ? report.avgPain : '—'}
+                {report.avgPain !== null ? report.avgPain : '-'}
               </Text>
               <Text style={styles.statLabel}>Avg pain</Text>
             </View>
@@ -199,13 +225,11 @@ export default function ReportScreen() {
             </View>
           </View>
 
-          {/* Weekly trend */}
           <View style={styles.card}>
             <Text style={styles.cardLabel}>Weekly average</Text>
             <WeeklyBars data={report.weeklyAvgs} />
           </View>
 
-          {/* Top regions */}
           {report.regionCounts.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.cardLabel}>Top regions</Text>
@@ -226,7 +250,6 @@ export default function ReportScreen() {
             </View>
           )}
 
-          {/* Medications */}
           {report.medDoseCounts.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.cardLabel}>Medications</Text>
@@ -253,11 +276,11 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.xs,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   heading: {
     fontFamily: FontFamily.sans,
@@ -268,7 +291,30 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.sans,
     fontSize: FontSize.bodySmall,
     color: Colors.textSecondary,
+    marginTop: 1,
   },
+
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.med,
+    borderRadius: 20,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    gap: 6,
+    minWidth: 44,
+    justifyContent: 'center',
+  },
+  exportBtnDisabled: {
+    opacity: 0.45,
+  },
+  exportLabel: {
+    fontFamily: FontFamily.sans,
+    fontSize: FontSize.bodySmall,
+    fontWeight: '600',
+    color: '#fff',
+  },
+
   scroll: {
     padding: Spacing.lg,
     paddingBottom: Spacing.xl,

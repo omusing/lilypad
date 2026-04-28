@@ -44,3 +44,4 @@ app-example
 # local AI tooling (Claude Code, agent sessions)
 .claude/
 .agents/
+.gstack/

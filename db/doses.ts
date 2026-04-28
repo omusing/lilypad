@@ -129,6 +129,23 @@ export async function getDoseCountsInRange(
   return Object.fromEntries(rows.map(r => [r.medication_id, r.total]));
 }
 
+// Returns doses joined with medication info within a date range — used by PDF report.
+export async function getDosesInRangeWithMedication(
+  fromISO: string,
+  toISO: string
+): Promise<(Dose & { med_name: string; med_dose: string | null })[]> {
+  const db = await getDb();
+  return db.getAllAsync<Dose & { med_name: string; med_dose: string | null }>(
+    `SELECT d.id, d.medication_id, d.taken_at, d.quantity, d.note, d.updated_at,
+            m.name AS med_name, m.dose AS med_dose
+     FROM medication_doses d
+     JOIN medications m ON d.medication_id = m.id
+     WHERE d.taken_at >= ? AND d.taken_at <= ?
+     ORDER BY d.taken_at DESC`,
+    [fromISO, toISO]
+  );
+}
+
 // Returns all doses joined with medication name/dose — used by Timeline.
 export async function getAllDosesWithMedication(): Promise<
   (Dose & { med_name: string; med_dose: string | null })[]

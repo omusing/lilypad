@@ -9,12 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, FontFamily, FontSize, Spacing, Radius, Shadow, TouchTarget } from '@/constants/theme';
 import {
-  resetDatabase, seedClientA, seedJerry, seedMicky, seedDonny,
+  resetDatabase, seedClientA, seedJerry, seedMicky, seedDonny, seedMichael,
 } from '@/db/seed';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ActionKey = 'reset' | 'intro' | 'clientA' | 'jerry' | 'micky' | 'donny';
+type ActionKey = 'reset' | 'intro' | 'clientA' | 'jerry' | 'micky' | 'donny' | 'michael';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -136,6 +136,10 @@ export default function DevToolsScreen() {
           <View style={styles.divider} />
           {btn('donny', 'Donny', 'Med-focused · minimal pain logs · 3 drugs AM/PM', 'medical-outline', Colors.brand,
             () => confirmSeed('donny', 'Donny', seedDonny)
+          )}
+          <View style={styles.divider} />
+          {btn('michael', 'Michael', 'Daily back pain 0-10 · 3 rotating meds · 30 days', 'body-outline', Colors.textSecondary,
+            () => confirmSeed('michael', 'Michael', seedMichael)
           )}
         </View>
       </ScrollView>

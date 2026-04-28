@@ -1,7 +1,5 @@
 import { getDb } from './client';
 import { insertMedication } from './medications';
-import { insertEntry } from './entries';
-import type { NewEntry } from './schema';
 
 // ─── Reset ────────────────────────────────────────────────────────────────────
 
@@ -165,6 +163,107 @@ export async function seedMicky(): Promise<void> {
 
   for (const [daysAgo, mi, q] of extraDoses) {
     await logDoseAt(meds[mi].id, ts(daysAgo, 15, 0), q);
+  }
+}
+
+// ─── Michael ──────────────────────────────────────────────────────────────────
+// Daily lower-back pain, 30 days. Rotates between 3 muscle/pain meds.
+// Pain spans 0-10. Doses 1-3 per intake. Mood & sleep use full 1-5 range.
+
+export async function seedMichael(): Promise<void> {
+  await resetDatabase();
+
+  const cyc = await insertMedication({ name: 'Cyclobenzaprine', dose: '10mg',  route: 'oral', frequency: 'as needed' });
+  const ibu = await insertMedication({ name: 'Ibuprofen',       dose: '400mg', route: 'oral', frequency: 'as needed' });
+  const mec = await insertMedication({ name: 'Methocarbamol',   dose: '750mg', route: 'oral', frequency: 'as needed' });
+  await setName('Michael');
+
+  // One entry per day (daysAgo 1..30), with a second entry on high-pain days
+  const dayData: {
+    pain: number; regions: string[]; qualities: string[];
+    triggers: string[]; mood: number; sleep: number; note: string | null;
+    hour: number; min: number;
+    pain2?: number; hour2?: number; min2?: number; note2?: string | null;
+    medId: number; qty: number; doseOffsetMin: number;
+    medId2?: number; qty2?: number; dose2OffsetMin?: number;
+  }[] = [
+    { pain:5, regions:['lower-back'],         qualities:['Aching','Tight'],   triggers:['Physical activity'], mood:3,sleep:3, note:null,                  hour:7, min:30, pain2:3, hour2:17,min2:0,  note2:'Better after stretching', medId:ibu.id, qty:2, doseOffsetMin:15 },
+    { pain:6, regions:['lower-back','hips'],   qualities:['Sharp','Aching'],   triggers:['Physical activity'], mood:2,sleep:2, note:null,                  hour:8, min:0,                                                              medId:cyc.id, qty:1, doseOffsetMin:20 },
+    { pain:4, regions:['lower-back'],          qualities:['Aching'],           triggers:['Sitting long'],      mood:3,sleep:3, note:null,                  hour:9, min:15,                                                             medId:ibu.id, qty:1, doseOffsetMin:10 },
+    { pain:5, regions:['lower-back','hips'],   qualities:['Tight','Aching'],   triggers:['Physical activity'], mood:2,sleep:2, note:null,                  hour:7, min:45, pain2:4, hour2:19,min2:0,  note2:null,                     medId:mec.id, qty:2, doseOffsetMin:15 },
+    { pain:9, regions:['lower-back','legs'],   qualities:['Sharp','Shooting'], triggers:['Physical activity'], mood:1,sleep:1, note:'Bad spasm episode',   hour:8, min:30,                                                             medId:cyc.id, qty:3, doseOffsetMin:10, medId2:ibu.id,qty2:2,dose2OffsetMin:240 },
+    { pain:6, regions:['lower-back'],          qualities:['Aching','Tight'],   triggers:['Sitting long'],      mood:2,sleep:2, note:null,                  hour:9, min:0,                                                              medId:mec.id, qty:1, doseOffsetMin:20 },
+    { pain:5, regions:['lower-back','hips'],   qualities:['Aching'],           triggers:[],                    mood:3,sleep:3, note:null,                  hour:8, min:0,  pain2:3, hour2:18,min2:0,  note2:'Felt better after walk', medId:ibu.id, qty:2, doseOffsetMin:15 },
+    { pain:4, regions:['lower-back'],          qualities:['Aching'],           triggers:['Sitting long'],      mood:3,sleep:3, note:null,                  hour:10,min:0,                                                              medId:cyc.id, qty:1, doseOffsetMin:20 },
+    { pain:5, regions:['lower-back','hips'],   qualities:['Tight','Aching'],   triggers:['Physical activity'], mood:2,sleep:2, note:null,                  hour:8, min:15,                                                             medId:mec.id, qty:2, doseOffsetMin:15 },
+    { pain:4, regions:['lower-back'],          qualities:['Dull','Aching'],    triggers:[],                    mood:3,sleep:4, note:null,                  hour:9, min:0,                                                              medId:ibu.id, qty:1, doseOffsetMin:10 },
+    { pain:8, regions:['lower-back','legs'],   qualities:['Sharp'],            triggers:['Physical activity'], mood:2,sleep:2, note:'Referred pain to leg',hour:7, min:30,                                                             medId:cyc.id, qty:3, doseOffsetMin:10, medId2:mec.id,qty2:1,dose2OffsetMin:180 },
+    { pain:5, regions:['lower-back'],          qualities:['Aching','Tight'],   triggers:['Sitting long'],      mood:3,sleep:3, note:null,                  hour:9, min:30,                                                             medId:ibu.id, qty:2, doseOffsetMin:20 },
+    { pain:4, regions:['lower-back'],          qualities:['Dull'],             triggers:[],                    mood:3,sleep:3, note:null,                  hour:8, min:0,                                                              medId:mec.id, qty:1, doseOffsetMin:15 },
+    { pain:5, regions:['lower-back','hips'],   qualities:['Aching'],           triggers:['Physical activity'], mood:2,sleep:2, note:null,                  hour:7, min:45,                                                             medId:cyc.id, qty:2, doseOffsetMin:15 },
+    { pain:4, regions:['lower-back'],          qualities:['Dull','Tight'],     triggers:[],                    mood:3,sleep:3, note:null,                  hour:9, min:0,                                                              medId:ibu.id, qty:1, doseOffsetMin:20 },
+    { pain:2, regions:['lower-back'],          qualities:['Dull'],             triggers:[],                    mood:4,sleep:4, note:'Good day',            hour:10,min:0,                                                              medId:mec.id, qty:1, doseOffsetMin:30 },
+    { pain:5, regions:['lower-back','hips'],   qualities:['Aching','Sharp'],   triggers:['Physical activity'], mood:2,sleep:2, note:null,                  hour:8, min:15,                                                             medId:cyc.id, qty:2, doseOffsetMin:15 },
+    { pain:7, regions:['lower-back','legs'],   qualities:['Shooting','Tight'], triggers:['Physical activity'], mood:2,sleep:1, note:null,                  hour:7, min:30,                                                             medId:ibu.id, qty:3, doseOffsetMin:10, medId2:cyc.id,qty2:1,dose2OffsetMin:300 },
+    { pain:5, regions:['lower-back'],          qualities:['Aching'],           triggers:['Sitting long'],      mood:3,sleep:3, note:null,                  hour:9, min:0,                                                              medId:mec.id, qty:2, doseOffsetMin:20 },
+    { pain:4, regions:['lower-back','hips'],   qualities:['Dull','Aching'],    triggers:[],                    mood:3,sleep:3, note:null,                  hour:8, min:30,                                                             medId:ibu.id, qty:1, doseOffsetMin:10 },
+    { pain:5, regions:['lower-back'],          qualities:['Tight','Aching'],   triggers:['Physical activity'], mood:2,sleep:2, note:null,                  hour:7, min:45,                                                             medId:cyc.id, qty:2, doseOffsetMin:15 },
+    { pain:4, regions:['lower-back'],          qualities:['Dull'],             triggers:[],                    mood:3,sleep:3, note:null,                  hour:9, min:0,                                                              medId:mec.id, qty:1, doseOffsetMin:20 },
+    { pain:0, regions:['lower-back'],          qualities:[],                   triggers:[],                    mood:5,sleep:5, note:'Pain-free day',       hour:10,min:30,                                                             medId:ibu.id, qty:1, doseOffsetMin:30 },
+    { pain:5, regions:['lower-back','hips'],   qualities:['Aching','Tight'],   triggers:['Physical activity'], mood:2,sleep:2, note:null,                  hour:8, min:0,                                                              medId:cyc.id, qty:2, doseOffsetMin:15 },
+    { pain:8, regions:['lower-back','legs'],   qualities:['Sharp','Shooting'], triggers:['Physical activity'], mood:1,sleep:1, note:'Worst this week',     hour:7, min:30,                                                             medId:mec.id, qty:3, doseOffsetMin:10, medId2:ibu.id,qty2:2,dose2OffsetMin:240 },
+    { pain:5, regions:['lower-back'],          qualities:['Aching'],           triggers:['Sitting long'],      mood:3,sleep:2, note:null,                  hour:9, min:0,                                                              medId:cyc.id, qty:2, doseOffsetMin:20 },
+    { pain:4, regions:['lower-back','hips'],   qualities:['Dull','Aching'],    triggers:[],                    mood:3,sleep:3, note:null,                  hour:8, min:30,                                                             medId:ibu.id, qty:1, doseOffsetMin:10 },
+    { pain:6, regions:['lower-back'],          qualities:['Aching','Tight'],   triggers:['Physical activity'], mood:2,sleep:2, note:null,                  hour:7, min:45,                                                             medId:mec.id, qty:2, doseOffsetMin:15 },
+    { pain:4, regions:['lower-back'],          qualities:['Dull'],             triggers:[],                    mood:3,sleep:3, note:null,                  hour:9, min:0,                                                              medId:cyc.id, qty:1, doseOffsetMin:20 },
+    { pain:5, regions:['lower-back','hips'],   qualities:['Aching','Sharp'],   triggers:['Physical activity'], mood:2,sleep:2, note:null,                  hour:8, min:0,                                                              medId:ibu.id, qty:2, doseOffsetMin:15 },
+  ];
+
+  const db = await getDb();
+  for (let i = 0; i < dayData.length; i++) {
+    const daysAgo = dayData.length - i; // oldest first
+    const d = dayData[i];
+    const entryTime = ts(daysAgo, d.hour, d.min);
+
+    await db.runAsync(
+      `INSERT INTO entries
+        (entry_date, pain_level, pain_regions, pain_qualities, triggers,
+         mood, sleep_quality, medication_ids, note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+      [
+        dateStr(daysAgo), d.pain,
+        JSON.stringify(d.regions),
+        d.qualities.length ? JSON.stringify(d.qualities) : null,
+        d.triggers.length  ? JSON.stringify(d.triggers)  : null,
+        d.mood, d.sleep, d.note, entryTime,
+      ]
+    );
+
+    if (d.pain2 !== undefined) {
+      await db.runAsync(
+        `INSERT INTO entries
+          (entry_date, pain_level, pain_regions, pain_qualities, triggers,
+           mood, sleep_quality, medication_ids, note, created_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, NULL, ?, ?)`,
+        [
+          dateStr(daysAgo), d.pain2,
+          JSON.stringify(d.regions),
+          JSON.stringify(['Dull']),
+          Math.min(5, d.mood + 1), d.sleep, d.note2 ?? null,
+          ts(daysAgo, d.hour2!, d.min2!),
+        ]
+      );
+    }
+
+    const doseTime = new Date(entryTime);
+    doseTime.setMinutes(doseTime.getMinutes() + d.doseOffsetMin);
+    await logDoseAt(d.medId, doseTime.toISOString(), d.qty);
+
+    if (d.medId2 !== undefined) {
+      const dose2Time = new Date(entryTime);
+      dose2Time.setMinutes(dose2Time.getMinutes() + d.dose2OffsetMin!);
+      await logDoseAt(d.medId2, dose2Time.toISOString(), d.qty2!);
+    }
   }
 }
 
